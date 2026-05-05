@@ -1,0 +1,55 @@
+# Dependências
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Build
+dist/
+build/
+.next/
+*.egg-info/
+
+# Variáveis de ambiente — NUNCA commitar
+.env
+.env.local
+.env.production
+.env.development
+.env.*.local
+backend/.env
+frontend/.env
+frontend/.env.local
+frontend/.env.production
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pip-log.txt
+
+# Sistema
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Railway
+.railway/
+
+# Supabase CLI temp
+supabase/.temp/
+
+# Coverage / testes
+coverage/
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Python venv local
+backend/venv/
