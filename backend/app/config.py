@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     openai_api_key: str
     supabase_anon_key: str = ""  # usado só no frontend — Railway não precisa definir
     # CORS origins (comma-separated)
-    cors_origins: str = "http://localhost:5173,https://corrigeai.vercel.app"
+    cors_origins: str = "http://localhost:5173"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

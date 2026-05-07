@@ -18,9 +18,20 @@ async def listar_alunos(turma_id: str, current_user: dict = Depends(get_current_
         raise HTTPException(status_code=404, detail="Turma não encontrada.")
 
     result = await asyncio.to_thread(
-        supabase.table("alunos").select("*").eq("turma_id", turma_id).order("nome").execute
+        supabase.table("alunos")
+        .select("*, resultados(nota_total)")
+        .eq("turma_id", turma_id)
+        .order("nome")
+        .execute
     )
-    return result.data
+    alunos = []
+    for a in result.data:
+        notas = [r["nota_total"] for r in (a.get("resultados") or []) if r["nota_total"] is not None]
+        media = round(sum(notas) / len(notas), 2) if notas else None
+        aluno = {k: v for k, v in a.items() if k != "resultados"}
+        aluno["media"] = media
+        alunos.append(aluno)
+    return alunos
 
 
 @router.post("/turmas/{turma_id}/alunos", response_model=AlunoOut, status_code=201)
