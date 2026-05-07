@@ -3,24 +3,39 @@ import logging
 import random
 import uuid
 
-from app.db.supabase_client import get_supabase
+import httpx
+
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 BUCKET = "provas"
 
+# Supabase Storage REST API — usado diretamente porque supabase-py 2.x
+# não envia o header Authorization corretamente em chamadas de storage,
+# causando violação de RLS mesmo com service_role key.
+def _storage_url(path: str) -> str:
+    return f"{settings.supabase_url}/storage/v1/object/{BUCKET}/{path}"
+
+def _headers(content_type: str | None = None, upsert: bool = False) -> dict:
+    h = {
+        "Authorization": f"Bearer {settings.supabase_service_role_key}",
+        "apikey": settings.supabase_service_role_key,
+    }
+    if content_type:
+        h["Content-Type"] = content_type
+    if upsert:
+        h["x-upsert"] = "true"
+    return h
+
 
 async def _storage_retry(fn, *, label: str, max_attempts: int = 3):
-    """Run a synchronous Supabase Storage callable with exponential backoff + jitter.
-
-    fn must be a zero-arg callable (lambda/partial). Its return value is passed through.
-    """
     for attempt in range(max_attempts):
         try:
-            return await asyncio.to_thread(fn)
+            return await fn()
         except Exception as exc:
             if attempt == max_attempts - 1:
                 raise
-            delay = random.uniform(0, 2 ** attempt)  # full jitter: 0-1s, 0-2s
+            delay = random.uniform(0, 2 ** attempt)
             logger.warning(
                 "Storage %s falhou (tentativa %d/%d) — retry em %.1fs: %s",
                 label, attempt + 1, max_attempts, delay, exc,
@@ -36,11 +51,6 @@ async def upload_file(
     atividade_id: str,
     custom_path: str | None = None,
 ) -> str:
-    """Upload a file to Supabase Storage and return its storage path.
-
-    Pass custom_path to override the auto-generated UUID path (e.g. for gabarito files).
-    """
-    supabase = get_supabase()
     if custom_path:
         storage_path = custom_path
     else:
@@ -48,25 +58,32 @@ async def upload_file(
         ext = raw_ext.strip(".") or "bin"
         storage_path = f"{atividade_id}/{uuid.uuid4()}.{ext}"
 
-    file_options: dict = {"content-type": content_type}
-    if custom_path:
-        file_options["upsert"] = "true"
+    upsert = bool(custom_path)
 
-    await _storage_retry(
-        lambda: supabase.storage.from_(BUCKET).upload(
-            path=storage_path,
-            file=content,
-            file_options=file_options,
-        ),
-        label=f"upload/{storage_path}",
-    )
+    async def _do_upload():
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                _storage_url(storage_path),
+                content=content,
+                headers=_headers(content_type=content_type, upsert=upsert),
+            )
+            if resp.status_code not in (200, 201):
+                raise RuntimeError(f"Storage upload falhou: {resp.status_code} {resp.text}")
+        return storage_path
+
+    await _storage_retry(_do_upload, label=f"upload/{storage_path}")
     return storage_path
 
 
 async def download_file(storage_path: str) -> bytes:
-    """Download a file from Supabase Storage without blocking the event loop."""
-    supabase = get_supabase()
-    return await _storage_retry(
-        lambda: supabase.storage.from_(BUCKET).download(storage_path),
-        label=f"download/{storage_path}",
-    )
+    async def _do_download():
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.get(
+                _storage_url(storage_path),
+                headers=_headers(),
+            )
+            if resp.status_code != 200:
+                raise RuntimeError(f"Storage download falhou: {resp.status_code} {resp.text}")
+            return resp.content
+
+    return await _storage_retry(_do_download, label=f"download/{storage_path}")
