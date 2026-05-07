@@ -155,8 +155,14 @@ async def upload_gabarito(
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail="Arquivo excede o limite de 20 MB.")
 
-    raw_ext = (file.filename or "").rsplit(".", 1)[-1] if "." in (file.filename or "") else ""
-    ext = raw_ext.lower() or "pdf"
+    # Deriva extensão do MIME type (ignorando nome do arquivo para evitar path traversal)
+    _mime_to_ext = {
+        "application/pdf": "pdf",
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/webp": "webp",
+    }
+    ext = _mime_to_ext.get(file.content_type, "pdf")
     storage_path = f"{atividade_id}/gabarito.{ext}"
     old_path = ativ.data.get("gabarito_pdf_path")
 

@@ -174,6 +174,10 @@ async def _processar_upload(
         ct = upload.get("content_type", "image/jpeg")
         texto = await _extrair_texto_imagem(content, content_type=ct)
 
+    if not texto.strip():
+        logger.warning("Texto extraido vazio para upload %s — arquivo ilegivel ou corrompido", upload["id"])
+        return
+
     aluno_id = upload.get("aluno_id")
     if not aluno_id:
         aluno_id = await _identificar_aluno(texto, alunos)

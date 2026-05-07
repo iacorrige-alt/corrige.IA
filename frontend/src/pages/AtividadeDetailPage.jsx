@@ -82,6 +82,9 @@ export default function AtividadeDetailPage() {
   const fileRef = useRef()
   const gabaritoRef = useRef()
 
+  const [gabaritoUploading, setGabaritoUploading] = useState(false)
+  const [timedOut, setTimedOut] = useState(false)
+
   const { data: atividade } = useQuery({
     queryKey: ['atividade', id],
     queryFn: () => api.atividades.get(id),
@@ -104,7 +107,10 @@ export default function AtividadeDetailPage() {
     refetchInterval: (query) => {
       const st = query.state.data?.status
       if (st !== 'corrigindo') return false
-      if (pollCount.current >= MAX_POLLS) return false
+      if (pollCount.current >= MAX_POLLS) {
+        setTimedOut(true)
+        return false
+      }
       return 5000
     },
   })
@@ -112,9 +118,11 @@ export default function AtividadeDetailPage() {
   useEffect(() => {
     if (status?.status === 'concluida') {
       pollCount.current = 0
+      setTimedOut(false)
       qc.invalidateQueries({ queryKey: ['resultados', id] })
     } else if (status?.status === 'erro') {
       pollCount.current = 0
+      setTimedOut(false)
     }
   }, [status?.status, id, qc])
 
@@ -133,12 +141,19 @@ export default function AtividadeDetailPage() {
     const file = e.target.files?.[0]
     if (!file) return
     setGabaritoError('')
+    if (file.size > 20 * 1024 * 1024) {
+      setGabaritoError('Arquivo excede o limite de 20 MB.')
+      e.target.value = ''
+      return
+    }
+    setGabaritoUploading(true)
     try {
       await api.atividades.uploadGabarito(id, file)
       qc.invalidateQueries({ queryKey: ['atividade', id] })
     } catch (err) {
       setGabaritoError(err.message || 'Erro ao enviar gabarito.')
     } finally {
+      setGabaritoUploading(false)
       e.target.value = ''
     }
   }
@@ -197,6 +212,16 @@ export default function AtividadeDetailPage() {
             <Badge type={status.status} />
           </div>
 
+          {timedOut && status.status === 'corrigindo' && (
+            <div className="mb-3 p-4 rounded-2xl bg-yellow-50 border border-yellow-200 flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-yellow-800">A correção está demorando mais que o esperado</p>
+                <p className="text-xs text-yellow-600 mt-0.5">Recarregue a página para verificar o status ou aguarde mais alguns minutos.</p>
+              </div>
+            </div>
+          )}
+
           {status.uploads_com_erro > 0 && status.status === 'concluida' && (
             <div className="mb-6 p-4 rounded-2xl bg-orange-50 border border-orange-200 flex items-start gap-3">
               <AlertTriangle className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
@@ -246,9 +271,11 @@ export default function AtividadeDetailPage() {
               />
               <button
                 onClick={() => gabaritoRef.current?.click()}
-                className="px-3 py-2 text-sm border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors"
+                disabled={gabaritoUploading}
+                className="px-3 py-2 text-sm border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50 flex items-center gap-2"
               >
-                Substituir
+                {gabaritoUploading ? <Spinner size="sm" /> : null}
+                {gabaritoUploading ? 'Enviando...' : 'Substituir'}
               </button>
               <button
                 onClick={handleDeleteGabarito}
@@ -271,10 +298,11 @@ export default function AtividadeDetailPage() {
             />
             <button
               onClick={() => gabaritoRef.current?.click()}
-              className="flex items-center gap-2 px-5 py-2.5 border-2 border-dashed border-gray-300 text-gray-600 rounded-xl font-medium hover:border-indigo-400 hover:text-indigo-600 transition-colors w-full sm:w-auto justify-center"
+              disabled={gabaritoUploading}
+              className="flex items-center gap-2 px-5 py-2.5 border-2 border-dashed border-gray-300 text-gray-600 rounded-xl font-medium hover:border-indigo-400 hover:text-indigo-600 transition-colors w-full sm:w-auto justify-center disabled:opacity-50"
             >
-              <FileText className="h-5 w-5" />
-              Enviar Gabarito (PDF ou imagem)
+              {gabaritoUploading ? <Spinner size="sm" /> : <FileText className="h-5 w-5" />}
+              {gabaritoUploading ? 'Enviando gabarito...' : 'Enviar Gabarito (PDF ou imagem)'}
             </button>
           </>
         )}
