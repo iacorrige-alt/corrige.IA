@@ -17,14 +17,12 @@ async def register(body: RegisterRequest):
     """Create a new teacher account and return an active session immediately."""
     supabase = get_supabase()
     try:
-        # Admin API: creates user with email pre-confirmed so teachers log in right away
-        created = await asyncio.to_thread(
-            supabase.auth.admin.create_user,
+        resp = await asyncio.to_thread(
+            supabase.auth.sign_up,
             {
                 "email": body.email,
                 "password": body.password,
-                "user_metadata": {"nome": body.nome},
-                "email_confirm": True,
+                "options": {"data": {"nome": body.nome}},
             },
         )
     except AuthApiError as exc:
@@ -46,35 +44,29 @@ async def register(body: RegisterRequest):
             detail="Serviço de autenticação temporariamente indisponível.",
         ) from exc
 
-    # Sign in immediately to get an active JWT session
-    try:
-        session_resp = await asyncio.to_thread(
-            supabase.auth.sign_in_with_password,
-            {"email": body.email, "password": body.password},
-        )
-    except Exception as exc:
-        logger.error("Conta criada mas login automático falhou para %s: %s", body.email, exc)
+    if resp.session is None:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Conta criada, mas o login automático falhou. Tente entrar manualmente.",
-        ) from exc
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Confirme seu e-mail antes de entrar. Verifique sua caixa de entrada.",
+        )
 
-    # The trigger handle_new_user() runs synchronously on INSERT in auth.users,
-    # so the professores row already exists by the time we reach here.
+    # Aguarda o trigger handle_new_user() inserir a linha em professores
+    import asyncio as _asyncio
+    await _asyncio.sleep(0.5)
     prof = await asyncio.to_thread(
-        supabase.table("professores").select("nome").eq("id", created.user.id).single().execute
+        supabase.table("professores").select("nome").eq("id", resp.user.id).single().execute
     )
     nome = prof.data["nome"] if prof.data else body.nome
 
     logger.info(
         "Nova conta criada: %s (id=%s)",
-        created.user.email, created.user.id,
-        extra={"user_id": str(created.user.id)},
+        resp.user.email, resp.user.id,
+        extra={"user_id": str(resp.user.id)},
     )
     return AuthResponse(
-        access_token=session_resp.session.access_token,
-        user_id=str(created.user.id),
-        email=created.user.email,
+        access_token=resp.session.access_token,
+        user_id=str(resp.user.id),
+        email=resp.user.email,
         nome=nome,
     )
 
