@@ -635,6 +635,80 @@ def _salvar_resultado(
             supabase.table("respostas").delete().in_("id", old_ids).execute()
 
 
+# ─── Extração de questões de PDF ─────────────────────────────────────────────
+
+async def extrair_questoes_pdf(content: bytes, content_type: str) -> list[dict]:
+    """Extract structured questions from a PDF or image using GPT-4o."""
+    if content_type == "application/pdf":
+        texto = await _extrair_texto_pdf(content)
+    else:
+        texto = await _extrair_texto_imagem(content, content_type=content_type)
+
+    if not texto.strip():
+        return []
+
+    prompt = f"""Você é um professor assistente. Analise o documento de prova/atividade abaixo e extraia todas as questões.
+
+Texto do documento:
+{texto[:6000]}
+
+Retorne um JSON no formato exato:
+{{
+  "questoes": [
+    {{
+      "enunciado": "<enunciado completo da questão, incluindo alternativas se houver>",
+      "gabarito": "<resposta ou gabarito da questão se estiver no documento, null caso contrário>",
+      "tipo": "dissertativa" | "multipla_escolha",
+      "peso": <use 1.0 como padrão se não especificado, ou o valor numérico indicado no documento>,
+      "ordem": <número sequencial começando em 1>
+    }}
+  ]
+}}
+
+Regras:
+- Extraia APENAS as questões. Ignore cabeçalho, nome do aluno, data, instruções gerais.
+- Se a questão tiver alternativas (A, B, C...), inclua-as no enunciado e defina tipo "multipla_escolha".
+- Se houver pontuação indicada (ex: "(2,0)", "2 pts", "vale 3"), use como peso numérico.
+- Mantenha o enunciado completo, incluindo subperguntas.
+- Se o gabarito ou resposta esperada estiver no documento, inclua. Caso contrário, retorne null.
+Responda em português."""
+
+    resp = await _openai_call(
+        lambda: client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=4096,
+            temperature=0,
+            response_format={"type": "json_object"},
+        )
+    )
+
+    try:
+        raw = json.loads(resp.choices[0].message.content or "{}")
+    except json.JSONDecodeError:
+        logger.error("extrair_questoes_pdf: JSON inválido retornado pelo GPT")
+        return []
+
+    result = []
+    for i, q in enumerate(raw.get("questoes", [])):
+        if not (q.get("enunciado") or "").strip():
+            continue
+        result.append({
+            "enunciado": q["enunciado"].strip(),
+            "gabarito": q.get("gabarito") or None,
+            "tipo": q.get("tipo", "dissertativa"),
+            "peso": float(q.get("peso") or 1.0),
+            "ordem": q.get("ordem", i + 1),
+        })
+
+    logger.info(
+        "extrair_questoes_pdf: %d questão(ões) extraída(s)",
+        len(result),
+        extra={"total": len(result)},
+    )
+    return result
+
+
 # ─── Turma dashboard analysis ─────────────────────────────────────────────────
 
 async def analisar_turma(

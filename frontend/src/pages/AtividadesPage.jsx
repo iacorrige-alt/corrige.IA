@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, ChevronRight, FileText } from 'lucide-react'
+import { Plus, ChevronRight, FileText, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { api } from '../lib/api'
 import Spinner from '../components/Spinner'
@@ -23,6 +23,9 @@ export default function AtividadesPage() {
   const [questoes, setQuestoes] = useState([
     { _key: 1, enunciado: '', gabarito: '', tipo: 'dissertativa', peso: 1, ordem: 1 },
   ])
+  const [importing, setImporting] = useState(false)
+  const [importError, setImportError] = useState('')
+  const importRef = useRef()
 
   const { data: atividades = [], isLoading } = useQuery({
     queryKey: ['atividades'],
@@ -48,6 +51,31 @@ export default function AtividadesPage() {
     setForm({ turma_id: '', nome: '', tipo: 'prova', modo_correcao: 'automatico', gabarito_texto: '' })
     setQuestoes([{ _key: nextKey(), enunciado: '', gabarito: '', tipo: 'dissertativa', peso: 1, ordem: 1 }])
     setFormError('')
+    setImportError('')
+  }
+
+  async function handleImportPdf(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImportError('')
+    setImporting(true)
+    try {
+      const { questoes: extraidas } = await api.atividades.extrairQuestoesPdf(file)
+      if (!extraidas?.length) {
+        setImportError('Nenhuma questão encontrada no documento. Verifique se o PDF contém as questões da prova.')
+        return
+      }
+      const temQuestoesPreenchidas = questoes.some(q => q.enunciado.trim())
+      if (temQuestoesPreenchidas && !confirm(`Substituir as ${questoes.length} questão(ões) já preenchidas pelas ${extraidas.length} extraídas do PDF?`)) {
+        return
+      }
+      setQuestoes(extraidas.map((q, i) => ({ ...q, _key: nextKey(), ordem: i + 1 })))
+    } catch (err) {
+      setImportError(err.message || 'Erro ao processar o PDF.')
+    } finally {
+      setImporting(false)
+      e.target.value = ''
+    }
   }
 
   function addQuestao() {
@@ -211,12 +239,36 @@ export default function AtividadesPage() {
 
           {/* Questões */}
           <div>
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
               <label className="block text-sm font-medium text-gray-700">Questões</label>
-              <button type="button" onClick={addQuestao} className="text-xs text-indigo-600 hover:underline">
-                + Adicionar
-              </button>
+              <div className="flex items-center gap-2">
+                <input
+                  ref={importRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  className="hidden"
+                  onChange={handleImportPdf}
+                />
+                <button
+                  type="button"
+                  onClick={() => importRef.current?.click()}
+                  disabled={importing}
+                  className="flex items-center gap-1.5 text-xs text-purple-600 hover:text-purple-800 font-medium disabled:opacity-50"
+                >
+                  {importing
+                    ? <Spinner size="sm" />
+                    : <Sparkles className="h-3.5 w-3.5" />}
+                  {importing ? 'Extraindo...' : 'Importar do PDF'}
+                </button>
+                <span className="text-gray-300 text-xs">|</span>
+                <button type="button" onClick={addQuestao} className="text-xs text-indigo-600 hover:underline">
+                  + Adicionar
+                </button>
+              </div>
             </div>
+            {importError && (
+              <p className="text-xs text-red-600 mb-2">{importError}</p>
+            )}
             <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
               {questoes.map((q, idx) => (
                 <div key={q._key} className="p-3 border border-gray-200 rounded-xl space-y-2">

@@ -121,5 +121,21 @@ export const api = {
       })
     },
     deleteGabarito: (id) => request(`/atividades/${id}/gabarito`, { method: 'DELETE' }),
+    extrairQuestoesPdf: (file) => {
+      const token = getToken()
+      const form = new FormData()
+      form.append('file', file)
+      return fetch(`${API_URL}/atividades/extrair-questoes-pdf`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      }).then(async (r) => {
+        if (!r.ok) {
+          const e = await r.json().catch(() => ({ detail: r.statusText }))
+          throw new Error(e.detail || `Erro ${r.status}: ${r.statusText}`)
+        }
+        return r.json()
+      })
+    },
   },
 }

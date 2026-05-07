@@ -1,5 +1,5 @@
 import asyncio
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from app.models.schemas import AtividadeCreate, AtividadeOut, ResultadoOut
 from app.db.supabase_client import get_supabase
 from app.dependencies import get_current_user
@@ -76,6 +76,23 @@ async def criar_atividade(
         supabase.table("atividades").select("*, questoes(*)").eq("id", ativ_id).single().execute
     )
     return full.data
+
+
+@router.post("/extrair-questoes-pdf")
+async def extrair_questoes_do_pdf(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+):
+    from app.services.ai_service import extrair_questoes_pdf
+
+    ALLOWED = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
+    if file.content_type not in ALLOWED:
+        raise HTTPException(400, f"Tipo não suportado: {file.content_type}")
+    content = await file.read()
+    if len(content) > 20 * 1024 * 1024:
+        raise HTTPException(400, "Arquivo excede 20 MB.")
+    questoes = await extrair_questoes_pdf(content, file.content_type)
+    return {"questoes": questoes}
 
 
 @router.get("/{atividade_id}", response_model=AtividadeOut)
