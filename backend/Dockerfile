@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y \
 # Instala dependências Python antes de copiar o código
 # (aproveita cache do Docker se requirements.txt não mudou)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -r requirements.txt
 
 # Copia o restante do código
 COPY . .
