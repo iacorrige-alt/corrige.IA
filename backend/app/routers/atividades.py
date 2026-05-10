@@ -1,33 +1,30 @@
 import asyncio
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
-from app.models.schemas import AtividadeCreate, AtividadeOut, ResultadoOut
+import logging
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
+from app.models.schemas import AtividadeCreate, AtividadeOut, AtividadeUpdate, ResultadoOut
 from app.db.supabase_client import get_supabase
 from app.dependencies import get_current_user
+from app.limiter import limiter
+from app.quota import checar_limite_tokens
+from app.utils import ler_arquivo
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/atividades", tags=["atividades"])
 
 
 @router.get("", response_model=list[AtividadeOut])
 async def listar_atividades(current_user: dict = Depends(get_current_user)):
     supabase = get_supabase()
-    turmas = await asyncio.to_thread(
-        supabase.table("turmas").select("id").eq("professor_id", current_user["id"]).execute
-    )
-    turma_ids = [t["id"] for t in turmas.data]
-    if not turma_ids:
-        return []
-
     result = await asyncio.to_thread(
         supabase.table("atividades")
         .select("*, questoes(count)")
-        .in_("turma_id", turma_ids)
+        .eq("professor_id", current_user["id"])
         .order("data_criacao", desc=True)
         .execute
     )
-    # Normalize count response: [{"count": N}] → int on each row
     for a in result.data:
         count_data = a.get("questoes") or [{}]
-        a["questoes"] = None  # list view doesn't need questao content
+        a["questoes"] = None
         a["total_questoes"] = count_data[0].get("count", 0) if count_data else 0
     return result.data
 
@@ -78,20 +75,87 @@ async def criar_atividade(
     return full.data
 
 
+@router.patch("/{atividade_id}", response_model=AtividadeOut)
+async def atualizar_atividade(
+    atividade_id: str,
+    body: AtividadeUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    supabase = get_supabase()
+    updates = body.model_dump(exclude_none=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="Nenhum campo para atualizar.")
+
+    result = await asyncio.to_thread(
+        supabase.table("atividades")
+        .update(updates)
+        .eq("id", atividade_id)
+        .eq("professor_id", current_user["id"])
+        .execute
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Atividade não encontrada.")
+
+    full = await asyncio.to_thread(
+        supabase.table("atividades").select("*, questoes(*)").eq("id", atividade_id).single().execute
+    )
+    return full.data
+
+
+@router.delete("/{atividade_id}", status_code=204)
+async def deletar_atividade(
+    atividade_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    supabase = get_supabase()
+    ativ = await asyncio.to_thread(
+        supabase.table("atividades")
+        .select("id, gabarito_pdf_path, uploads(storage_path)")
+        .eq("id", atividade_id)
+        .eq("professor_id", current_user["id"])
+        .single()
+        .execute
+    )
+    if not ativ.data:
+        raise HTTPException(status_code=404, detail="Atividade não encontrada.")
+
+    # Coleta paths do storage antes de deletar do DB
+    storage_paths = [u["storage_path"] for u in (ativ.data.get("uploads") or [])]
+    if ativ.data.get("gabarito_pdf_path"):
+        storage_paths.append(ativ.data["gabarito_pdf_path"])
+
+    # Deleta do DB — FK CASCADE remove questoes, uploads, resultados, respostas
+    await asyncio.to_thread(
+        supabase.table("atividades").delete().eq("id", atividade_id).execute
+    )
+
+    # Remove arquivos do storage (best-effort)
+    if storage_paths:
+        try:
+            await asyncio.to_thread(
+                supabase.storage.from_("provas").remove, storage_paths
+            )
+        except Exception as exc:
+            logger.warning("Nao foi possivel remover arquivos da atividade %s: %s", atividade_id, exc)
+
+
 @router.post("/extrair-questoes-pdf")
+@limiter.limit("3/minute")
 async def extrair_questoes_do_pdf(
+    request: Request,
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user),
 ):
     from app.services.ai_service import extrair_questoes_pdf
 
+    supabase = get_supabase()
+    await checar_limite_tokens(current_user["id"], supabase)
+
     ALLOWED = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
     if file.content_type not in ALLOWED:
         raise HTTPException(400, f"Tipo não suportado: {file.content_type}")
-    content = await file.read()
-    if len(content) > 20 * 1024 * 1024:
-        raise HTTPException(400, "Arquivo excede 20 MB.")
-    questoes = await extrair_questoes_pdf(content, file.content_type)
+    content = await ler_arquivo(file, 20 * 1024 * 1024)
+    questoes = await extrair_questoes_pdf(content, file.content_type, professor_id=current_user["id"])
     return {"questoes": questoes}
 
 
@@ -103,18 +167,12 @@ async def get_atividade(
     supabase = get_supabase()
     ativ = await asyncio.to_thread(
         supabase.table("atividades").select("*, questoes(*)")
-        .eq("id", atividade_id).single().execute
+        .eq("id", atividade_id)
+        .eq("professor_id", current_user["id"])
+        .single().execute
     )
     if not ativ.data:
         raise HTTPException(status_code=404, detail="Atividade não encontrada.")
-
-    turma = await asyncio.to_thread(
-        supabase.table("turmas").select("id")
-        .eq("id", ativ.data["turma_id"]).eq("professor_id", current_user["id"]).single().execute
-    )
-    if not turma.data:
-        raise HTTPException(status_code=403, detail="Acesso negado.")
-
     return ativ.data
 
 
@@ -125,17 +183,13 @@ async def resultados_atividade(
 ):
     supabase = get_supabase()
     ativ = await asyncio.to_thread(
-        supabase.table("atividades").select("id, turma_id").eq("id", atividade_id).single().execute
+        supabase.table("atividades").select("id")
+        .eq("id", atividade_id)
+        .eq("professor_id", current_user["id"])
+        .single().execute
     )
     if not ativ.data:
         raise HTTPException(status_code=404, detail="Atividade não encontrada.")
-
-    turma = await asyncio.to_thread(
-        supabase.table("turmas").select("id")
-        .eq("id", ativ.data["turma_id"]).eq("professor_id", current_user["id"]).single().execute
-    )
-    if not turma.data:
-        raise HTTPException(status_code=403, detail="Acesso negado.")
 
     resultados = await asyncio.to_thread(
         supabase.table("resultados")

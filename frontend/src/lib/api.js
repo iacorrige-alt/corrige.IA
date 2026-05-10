@@ -15,8 +15,10 @@ async function request(path, options = {}) {
   const res = await fetch(`${API_URL}${path}`, { ...options, headers })
 
   if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(error.detail || 'Erro na requisição')
+    const body = await res.json().catch(() => ({ detail: res.statusText }))
+    const err = new Error(body.detail || 'Erro na requisição')
+    err.status = res.status
+    throw err
   }
 
   if (res.status === 204) return null
@@ -52,6 +54,8 @@ export const api = {
       request('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
     register: (nome, email, password) =>
       request('/auth/register', { method: 'POST', body: JSON.stringify({ nome, email, password }) }),
+    refresh: (refresh_token) =>
+      request('/auth/refresh', { method: 'POST', body: JSON.stringify({ refresh_token }) }),
     logout: () => request('/auth/logout', { method: 'POST' }),
     me: () => request('/auth/me'),
   },
@@ -62,6 +66,7 @@ export const api = {
     get: (id) => request(`/turmas/${id}`),
     dashboard: (id) => request(`/turmas/${id}/dashboard`),
     create: (data) => request('/turmas', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id, data) => request(`/turmas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     delete: (id) => request(`/turmas/${id}`, { method: 'DELETE' }),
   },
 
@@ -70,6 +75,7 @@ export const api = {
     list: (turmaId) => request(`/turmas/${turmaId}/alunos`),
     create: (turmaId, data) =>
       request(`/turmas/${turmaId}/alunos`, { method: 'POST', body: JSON.stringify(data) }),
+    update: (id, data) => request(`/alunos/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     delete: (id) => request(`/alunos/${id}`, { method: 'DELETE' }),
     dashboard: (id) => request(`/alunos/${id}/dashboard`),
   },
@@ -80,6 +86,8 @@ export const api = {
     get: (id) => request(`/atividades/${id}`),
     create: (data) =>
       request('/atividades', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id, data) => request(`/atividades/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    delete: (id) => request(`/atividades/${id}`, { method: 'DELETE' }),
     resultados: (id) => request(`/atividades/${id}/resultados`),
     status: (id) => request(`/atividades/${id}/status`),
     upload: (id, files) => {
@@ -115,7 +123,9 @@ export const api = {
       }).then(async (r) => {
         if (!r.ok) {
           const e = await r.json().catch(() => ({ detail: r.statusText }))
-          throw new Error(e.detail || `Erro ${r.status}: ${r.statusText}`)
+          const err = new Error(e.detail || `Erro ${r.status}: ${r.statusText}`)
+          err.status = r.status
+          throw err
         }
         return r.json()
       })
@@ -132,7 +142,9 @@ export const api = {
       }).then(async (r) => {
         if (!r.ok) {
           const e = await r.json().catch(() => ({ detail: r.statusText }))
-          throw new Error(e.detail || `Erro ${r.status}: ${r.statusText}`)
+          const err = new Error(e.detail || `Erro ${r.status}: ${r.statusText}`)
+          err.status = r.status
+          throw err
         }
         return r.json()
       })

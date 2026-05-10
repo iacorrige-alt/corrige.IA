@@ -9,6 +9,8 @@ from app.limiter import limiter
 from app.models.schemas import UploadResponse, StatusResponse, GabaritoUploadResponse
 from app.services.storage_service import upload_file
 from app.services.ai_service import corrigir_atividade
+from app.quota import checar_limite_tokens
+from app.utils import ler_arquivo
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +20,6 @@ ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
 
 # Atividade em "corrigindo" há mais de 15 min é considerada presa.
-# BackgroundTask morre silenciosamente se o worker reiniciar.
 STUCK_THRESHOLD = timedelta(minutes=15)
 
 
@@ -33,21 +34,18 @@ async def upload_provas(
 ):
     supabase = get_supabase()
 
-    # Ownership check
     ativ = await asyncio.to_thread(
-        supabase.table("atividades").select("id, turma_id, status")
-        .eq("id", atividade_id).single().execute
+        supabase.table("atividades").select("id, status")
+        .eq("id", atividade_id)
+        .eq("professor_id", current_user["id"])
+        .single().execute
     )
     if not ativ.data:
         raise HTTPException(status_code=404, detail="Atividade não encontrada.")
 
-    turma = await asyncio.to_thread(
-        supabase.table("turmas").select("id")
-        .eq("id", ativ.data["turma_id"]).eq("professor_id", current_user["id"]).single().execute
-    )
-    if not turma.data:
-        raise HTTPException(status_code=403, detail="Acesso negado.")
+    await checar_limite_tokens(current_user["id"], supabase)
 
+    # Fast-fail não-atômico: elimina a maioria dos duplicados sem custo de I/O.
     if ativ.data["status"] == "corrigindo":
         raise HTTPException(
             status_code=409,
@@ -62,12 +60,7 @@ async def upload_provas(
                 status_code=400,
                 detail=f"Tipo de arquivo não suportado: {file.content_type}",
             )
-        content = await file.read()
-        if len(content) > MAX_FILE_SIZE:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Arquivo '{file.filename}' excede o limite de 20 MB.",
-            )
+        content = await ler_arquivo(file, MAX_FILE_SIZE)
         file_contents.append((file.filename, file.content_type, content))
 
     # ── Fase 2: fazer os uploads (todos válidos) ─────────────────────────────
@@ -92,28 +85,35 @@ async def upload_provas(
     try:
         records = await asyncio.to_thread(supabase.table("uploads").insert(rows).execute)
     except Exception as exc:
-        # DB insert falhou — remove arquivos já enviados ao storage para evitar órfãos
         for path in storage_paths:
             try:
-                await asyncio.to_thread(
-                    supabase.storage.from_("provas").remove, [path]
-                )
+                await asyncio.to_thread(supabase.storage.from_("provas").remove, [path])
             except Exception:
                 pass
         raise HTTPException(status_code=500, detail="Erro ao registrar uploads.") from exc
 
     upload_ids = [r["id"] for r in records.data]
 
-    # Atualiza status para "corrigindo" e registra o timestamp de início.
-    # correcao_iniciada_em é usado pelo lazy recovery em GET /status.
+    # Lock atômico: só transiciona para "corrigindo" se ainda não estiver nesse estado.
     now_utc = datetime.now(timezone.utc).isoformat()
-    await asyncio.to_thread(
+    lock = await asyncio.to_thread(
         supabase.table("atividades")
         .update({"status": "corrigindo", "correcao_iniciada_em": now_utc})
         .eq("id", atividade_id)
+        .neq("status", "corrigindo")
         .execute
     )
-    background_tasks.add_task(corrigir_atividade, atividade_id)
+    if not lock.data:
+        for path in storage_paths:
+            try:
+                await asyncio.to_thread(supabase.storage.from_("provas").remove, [path])
+            except Exception:
+                pass
+        raise HTTPException(
+            status_code=409,
+            detail="Correção já em andamento. Aguarde a conclusão antes de enviar novos arquivos.",
+        )
+    background_tasks.add_task(corrigir_atividade, atividade_id, current_user["id"])
 
     return UploadResponse(
         message=f"{len(files)} arquivo(s) enviado(s). Correção iniciada.",
@@ -133,29 +133,21 @@ async def upload_gabarito(
     supabase = get_supabase()
 
     ativ = await asyncio.to_thread(
-        supabase.table("atividades").select("id, turma_id, gabarito_pdf_path")
-        .eq("id", atividade_id).single().execute
+        supabase.table("atividades").select("id, gabarito_pdf_path")
+        .eq("id", atividade_id)
+        .eq("professor_id", current_user["id"])
+        .single().execute
     )
     if not ativ.data:
         raise HTTPException(status_code=404, detail="Atividade não encontrada.")
-
-    turma = await asyncio.to_thread(
-        supabase.table("turmas").select("id")
-        .eq("id", ativ.data["turma_id"]).eq("professor_id", current_user["id"]).single().execute
-    )
-    if not turma.data:
-        raise HTTPException(status_code=403, detail="Acesso negado.")
 
     if file.content_type not in ALLOWED_TYPES:
         raise HTTPException(
             status_code=400,
             detail=f"Tipo de arquivo não suportado: {file.content_type}",
         )
-    content = await file.read()
-    if len(content) > MAX_FILE_SIZE:
-        raise HTTPException(status_code=400, detail="Arquivo excede o limite de 20 MB.")
+    content = await ler_arquivo(file, MAX_FILE_SIZE)
 
-    # Deriva extensão do MIME type (ignorando nome do arquivo para evitar path traversal)
     _mime_to_ext = {
         "application/pdf": "pdf",
         "image/jpeg": "jpg",
@@ -166,7 +158,6 @@ async def upload_gabarito(
     storage_path = f"{atividade_id}/gabarito.{ext}"
     old_path = ativ.data.get("gabarito_pdf_path")
 
-    # Upload novo arquivo primeiro — o arquivo antigo continua íntegro até o DB ser atualizado
     storage_path = await upload_file(
         content=content,
         filename=file.filename or f"gabarito.{ext}",
@@ -186,22 +177,15 @@ async def upload_gabarito(
             .execute
         )
     except Exception as exc:
-        # DB update falhou após o upload — remove o arquivo para evitar órfão
         try:
-            await asyncio.to_thread(
-                supabase.storage.from_("provas").remove, [storage_path]
-            )
+            await asyncio.to_thread(supabase.storage.from_("provas").remove, [storage_path])
         except Exception:
             pass
         raise HTTPException(status_code=500, detail="Erro ao registrar gabarito.") from exc
 
-    # Remove arquivo antigo após DB confirmado (best-effort)
-    # Se o path é igual (mesma extensão), o upsert já sobrescreveu — não deletar
     if old_path and old_path != storage_path:
         try:
-            await asyncio.to_thread(
-                supabase.storage.from_("provas").remove, [old_path]
-            )
+            await asyncio.to_thread(supabase.storage.from_("provas").remove, [old_path])
         except Exception as exc:
             logger.warning("Nao foi possivel remover gabarito anterior %s: %s", old_path, exc)
 
@@ -222,34 +206,30 @@ async def delete_gabarito(
     supabase = get_supabase()
 
     ativ = await asyncio.to_thread(
-        supabase.table("atividades").select("id, turma_id, gabarito_pdf_path")
-        .eq("id", atividade_id).single().execute
+        supabase.table("atividades").select("id, gabarito_pdf_path")
+        .eq("id", atividade_id)
+        .eq("professor_id", current_user["id"])
+        .single().execute
     )
     if not ativ.data:
         raise HTTPException(status_code=404, detail="Atividade não encontrada.")
 
-    turma = await asyncio.to_thread(
-        supabase.table("turmas").select("id")
-        .eq("id", ativ.data["turma_id"]).eq("professor_id", current_user["id"]).single().execute
-    )
-    if not turma.data:
-        raise HTTPException(status_code=403, detail="Acesso negado.")
-
     path = ativ.data.get("gabarito_pdf_path")
-    if path:
-        try:
-            await asyncio.to_thread(
-                supabase.storage.from_("provas").remove, [path]
-            )
-        except Exception:
-            pass
 
+    # Atualiza o DB primeiro — se falhar, o arquivo permanece íntegro e o estado é consistente.
     await asyncio.to_thread(
         supabase.table("atividades")
         .update({"gabarito_pdf_path": None, "gabarito_pdf_content_type": None})
         .eq("id", atividade_id)
         .execute
     )
+
+    # Remove do storage após confirmação do DB (best-effort).
+    if path:
+        try:
+            await asyncio.to_thread(supabase.storage.from_("provas").remove, [path])
+        except Exception as exc:
+            logger.warning("Nao foi possivel remover gabarito %s do storage: %s", path, exc)
 
 
 @router.get("/{atividade_id}/status", response_model=StatusResponse)
@@ -261,41 +241,27 @@ async def status_correcao(
 
     ativ = await asyncio.to_thread(
         supabase.table("atividades")
-        .select("id, status, turma_id, correcao_iniciada_em, uploads_com_erro")
-        .eq("id", atividade_id).single().execute
+        .select("id, status, correcao_iniciada_em, uploads_com_erro")
+        .eq("id", atividade_id)
+        .eq("professor_id", current_user["id"])
+        .single().execute
     )
     if not ativ.data:
         raise HTTPException(status_code=404, detail="Atividade não encontrada.")
 
-    turma = await asyncio.to_thread(
-        supabase.table("turmas").select("id")
-        .eq("id", ativ.data["turma_id"]).eq("professor_id", current_user["id"]).single().execute
-    )
-    if not turma.data:
-        raise HTTPException(status_code=403, detail="Acesso negado.")
-
     # ── Lazy Recovery ────────────────────────────────────────────────────────────
-    # BackgroundTask morre silenciosamente se o container reiniciar (Railway deploy,
-    # OOM kill, etc.). Ao invés de um cron externo, aproveitamos o polling que o
-    # frontend já faz a cada 5s para detectar e recuperar atividades presas.
-    #
-    # Optimistic locking: o .eq("status", "corrigindo") garante que apenas um
-    # worker atualiza — sem race condition se dois polls chegarem simultaneamente.
     if ativ.data["status"] == "corrigindo":
         iniciada_em_raw = ativ.data.get("correcao_iniciada_em")
         if iniciada_em_raw:
-            iniciada_em = datetime.fromisoformat(
-                iniciada_em_raw.replace("Z", "+00:00")
-            )
+            iniciada_em = datetime.fromisoformat(iniciada_em_raw.replace("Z", "+00:00"))
             if datetime.now(timezone.utc) - iniciada_em > STUCK_THRESHOLD:
                 await asyncio.to_thread(
                     supabase.table("atividades")
                     .update({"status": "erro"})
                     .eq("id", atividade_id)
-                    .eq("status", "corrigindo")  # optimistic lock
+                    .eq("status", "corrigindo")
                     .execute
                 )
-                # Reflete o novo status na resposta atual sem round-trip extra
                 ativ.data["status"] = "erro"
 
     status_map = {

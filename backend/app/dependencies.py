@@ -2,7 +2,7 @@ import asyncio
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from gotrue.errors import AuthApiError
+from supabase_auth.errors import AuthApiError
 from app.db.supabase_client import get_supabase
 
 security = HTTPBearer()

@@ -1,6 +1,6 @@
 import asyncio
 from fastapi import APIRouter, HTTPException, Depends
-from app.models.schemas import AlunoCreate, AlunoOut, DashboardAluno
+from app.models.schemas import AlunoCreate, AlunoOut, AlunoUpdate, DashboardAluno
 from app.db.supabase_client import get_supabase
 from app.dependencies import get_current_user
 
@@ -61,6 +61,38 @@ async def criar_aluno(
     )
     if not result.data:
         raise HTTPException(status_code=500, detail="Erro ao criar aluno.")
+    return result.data[0]
+
+
+@router.patch("/alunos/{aluno_id}", response_model=AlunoOut)
+async def atualizar_aluno(
+    aluno_id: str,
+    body: AlunoUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    supabase = get_supabase()
+    aluno = await asyncio.to_thread(
+        supabase.table("alunos").select("id, turma_id").eq("id", aluno_id).single().execute
+    )
+    if not aluno.data:
+        raise HTTPException(status_code=404, detail="Aluno não encontrado.")
+
+    turma = await asyncio.to_thread(
+        supabase.table("turmas").select("id")
+        .eq("id", aluno.data["turma_id"]).eq("professor_id", current_user["id"]).single().execute
+    )
+    if not turma.data:
+        raise HTTPException(status_code=403, detail="Acesso negado.")
+
+    parts = body.nome.strip().split()
+    initials = (parts[0][0] + parts[-1][0]).upper() if len(parts) >= 2 else parts[0][:2].upper()
+
+    result = await asyncio.to_thread(
+        supabase.table("alunos")
+        .update({"nome": body.nome, "initials": initials})
+        .eq("id", aluno_id)
+        .execute
+    )
     return result.data[0]
 
 

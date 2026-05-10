@@ -34,9 +34,15 @@ class RegisterRequest(BaseModel):
 
 class AuthResponse(BaseModel):
     access_token: str
+    refresh_token: str
+    expires_at: int  # Unix timestamp
     user_id: str
     email: str
     nome: str
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
 
 
 # ─── Professor ───────────────────────────────────────────────────────────────
@@ -46,9 +52,26 @@ class ProfessorOut(BaseModel):
     nome: str
     email: str
     criado_em: datetime
+    tokens_usados: int = 0
+    limite_tokens: int = 0
 
 
 # ─── Turma ───────────────────────────────────────────────────────────────────
+
+class TurmaUpdate(BaseModel):
+    nome: Optional[str] = None
+    disciplina: Optional[str] = None
+    cor: Optional[str] = None
+
+    @field_validator("nome", "disciplina")
+    @classmethod
+    def campos_nao_vazios(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            v = v.strip()
+            if not v:
+                raise ValueError("Campo não pode ser vazio.")
+        return v
+
 
 class TurmaCreate(BaseModel):
     nome: str
@@ -77,6 +100,18 @@ class TurmaOut(BaseModel):
 
 # ─── Aluno ───────────────────────────────────────────────────────────────────
 
+class AlunoUpdate(BaseModel):
+    nome: str
+
+    @field_validator("nome")
+    @classmethod
+    def nome_nao_vazio(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Nome não pode ser vazio.")
+        return v
+
+
 class AlunoCreate(BaseModel):
     nome: str
 
@@ -99,6 +134,20 @@ class AlunoOut(BaseModel):
 
 
 # ─── Atividade ───────────────────────────────────────────────────────────────
+
+class AtividadeUpdate(BaseModel):
+    nome: Optional[str] = None
+    tipo: Optional[Literal["prova", "atividade", "trabalho"]] = None
+
+    @field_validator("nome")
+    @classmethod
+    def nome_nao_vazio(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            v = v.strip()
+            if not v:
+                raise ValueError("Nome não pode ser vazio.")
+        return v
+
 
 class QuestaoCreate(BaseModel):
     enunciado: str

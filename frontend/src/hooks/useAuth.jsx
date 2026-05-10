@@ -3,7 +3,7 @@ import { api } from '../lib/api'
 
 const AuthContext = createContext(null)
 
-// Refresh token 5 minutes before expiry (Supabase tokens last 1h)
+// Renova o token 5 minutos antes do vencimento (tokens Supabase duram 1h)
 const REFRESH_MARGIN_MS = 5 * 60 * 1000
 
 export function AuthProvider({ children }) {
@@ -15,17 +15,45 @@ export function AuthProvider({ children }) {
     if (refreshTimer.current) clearTimeout(refreshTimer.current)
     const msUntilExpiry = expiresAt * 1000 - Date.now()
     const delay = Math.max(0, msUntilExpiry - REFRESH_MARGIN_MS)
+
     refreshTimer.current = setTimeout(async () => {
+      const refreshToken = localStorage.getItem('corrigeai_refresh_token')
+      if (!refreshToken) {
+        _clearSession()
+        return
+      }
       try {
-        // Re-validate session — if expired, clear user
-        await api.auth.me()
+        const data = await api.auth.refresh(refreshToken)
+        // Persiste os novos tokens e reagenda para o próximo vencimento
+        localStorage.setItem('corrigeai_token', data.access_token)
+        localStorage.setItem('corrigeai_refresh_token', data.refresh_token)
+        localStorage.setItem('corrigeai_expires_at', String(data.expires_at))
+        localStorage.setItem('corrigeai_user', JSON.stringify(data))
+        setUser({ id: data.user_id, email: data.email, nome: data.nome })
+        scheduleSessionCheck(data.expires_at)
       } catch {
-        localStorage.removeItem('corrigeai_token')
-        localStorage.removeItem('corrigeai_user')
-        setUser(null)
+        _clearSession()
       }
     }, delay)
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function _clearSession() {
+    localStorage.removeItem('corrigeai_token')
+    localStorage.removeItem('corrigeai_refresh_token')
+    localStorage.removeItem('corrigeai_expires_at')
+    localStorage.removeItem('corrigeai_user')
+    setUser(null)
+  }
+
+  function _persistSession(data) {
+    localStorage.setItem('corrigeai_token', data.access_token)
+    localStorage.setItem('corrigeai_refresh_token', data.refresh_token)
+    localStorage.setItem('corrigeai_expires_at', String(data.expires_at))
+    localStorage.setItem('corrigeai_user', JSON.stringify(data))
+    setUser({ id: data.user_id, email: data.email, nome: data.nome })
+    scheduleSessionCheck(data.expires_at)
+    return data
+  }
 
   useEffect(() => {
     const token = localStorage.getItem('corrigeai_token')
@@ -34,34 +62,25 @@ export function AuthProvider({ children }) {
       return
     }
 
-    // Decode expiry from JWT payload (no crypto needed — just inspect)
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]))
-      scheduleSessionCheck(payload.exp)
-    } catch { /* malformed token — let me() handle it */ }
+    // Agenda renovação com base no expires_at armazenado (ou decodificado do JWT)
+    const storedExpiry = localStorage.getItem('corrigeai_expires_at')
+    if (storedExpiry) {
+      scheduleSessionCheck(parseInt(storedExpiry, 10))
+    } else {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]))
+        scheduleSessionCheck(payload.exp)
+      } catch { /* token malformado — me() vai rejeitar */ }
+    }
 
     api.auth
       .me()
       .then((prof) => setUser(prof))
-      .catch(() => {
-        localStorage.removeItem('corrigeai_token')
-        localStorage.removeItem('corrigeai_user')
-      })
+      .catch(() => _clearSession())
       .finally(() => setLoading(false))
 
     return () => { if (refreshTimer.current) clearTimeout(refreshTimer.current) }
   }, [scheduleSessionCheck])
-
-  function _persistSession(data) {
-    localStorage.setItem('corrigeai_token', data.access_token)
-    localStorage.setItem('corrigeai_user', JSON.stringify(data))
-    setUser({ id: data.user_id, email: data.email, nome: data.nome })
-    try {
-      const payload = JSON.parse(atob(data.access_token.split('.')[1]))
-      scheduleSessionCheck(payload.exp)
-    } catch { /* ignore malformed token */ }
-    return data
-  }
 
   async function signIn(email, password) {
     return _persistSession(await api.auth.login(email, password))
@@ -74,9 +93,7 @@ export function AuthProvider({ children }) {
   async function signOut() {
     if (refreshTimer.current) clearTimeout(refreshTimer.current)
     try { await api.auth.logout() } catch { /* ignore */ }
-    localStorage.removeItem('corrigeai_token')
-    localStorage.removeItem('corrigeai_user')
-    setUser(null)
+    _clearSession()
   }
 
   return (

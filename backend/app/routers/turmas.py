@@ -1,7 +1,7 @@
 import asyncio
 from fastapi import APIRouter, HTTPException, Depends
 from app.models.schemas import (
-    TurmaCreate, TurmaOut,
+    TurmaCreate, TurmaOut, TurmaUpdate,
     DashboardTurma, DistribuicaoNota, EvolucaoTurma, RankingAluno, AnaliseIATurma,
 )
 from app.db.supabase_client import get_supabase
@@ -208,6 +208,7 @@ async def dashboard_turma(turma_id: str, current_user: dict = Depends(get_curren
             "total_flags": total_flags,
             "distribuicao": [{"faixa": d.faixa, "count": d.count} for d in distribuicao],
         },
+        professor_id=current_user["id"],
     )
     analise_ia = AnaliseIATurma(
         resumo=analise_raw.get("resumo", ""),
@@ -230,6 +231,40 @@ async def dashboard_turma(turma_id: str, current_user: dict = Depends(get_curren
         ranking=ranking,
         analise_ia=analise_ia,
     )
+
+
+@router.patch("/{turma_id}", response_model=TurmaOut)
+async def atualizar_turma(
+    turma_id: str,
+    body: TurmaUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    supabase = get_supabase()
+    updates = body.model_dump(exclude_none=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="Nenhum campo para atualizar.")
+
+    result = await asyncio.to_thread(
+        supabase.table("turmas")
+        .update(updates)
+        .eq("id", turma_id)
+        .eq("professor_id", current_user["id"])
+        .execute
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Turma não encontrada.")
+
+    row = result.data[0]
+    counts = await asyncio.to_thread(
+        supabase.table("turmas")
+        .select("alunos(count), atividades(count)")
+        .eq("id", turma_id)
+        .single()
+        .execute
+    )
+    row["total_alunos"] = (counts.data.get("alunos") or [{}])[0].get("count", 0)
+    row["total_atividades"] = (counts.data.get("atividades") or [{}])[0].get("count", 0)
+    return row
 
 
 @router.delete("/{turma_id}", status_code=204)
