@@ -8,9 +8,7 @@ RUN npm ci
 
 COPY . .
 
-# As variáveis VITE_ precisam estar disponíveis no build
-ARG VITE_SUPABASE_URL
-ARG VITE_SUPABASE_ANON_KEY
+# VITE_API_URL precisa estar disponível no build (injetada pelo Railway como build arg)
 ARG VITE_API_URL
 
 RUN npm run build

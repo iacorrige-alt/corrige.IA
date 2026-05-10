@@ -5,7 +5,6 @@ class Settings(BaseSettings):
     supabase_url: str
     supabase_service_role_key: str
     openai_api_key: str
-    supabase_anon_key: str = ""  # usado só no frontend — Railway não precisa definir
     # CORS origins (comma-separated)
     cors_origins: str = "http://localhost:5173"
 
