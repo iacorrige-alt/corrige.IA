@@ -315,3 +315,60 @@ class DashboardAluno(BaseModel):
     radar: list[RadarItem]
     analise_ia: str
     flags_detectadas: list[str]
+
+
+# ─── Questão (atualização) ────────────────────────────────────────────────────
+
+class QuestaoUpdate(BaseModel):
+    enunciado: Optional[str] = None
+    gabarito: Optional[str] = None
+    tipo: Optional[Literal["dissertativa", "multipla_escolha", "verdadeiro_falso"]] = None
+    peso: Optional[float] = Field(default=None, gt=0)
+    ordem: Optional[int] = Field(default=None, ge=1)
+
+
+# ─── Perfil ──────────────────────────────────────────────────────────────────
+
+class ProfessorUpdate(BaseModel):
+    nome: str
+
+    @field_validator("nome")
+    @classmethod
+    def nome_nao_vazio(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Nome não pode ser vazio.")
+        return v
+
+
+class ChangePasswordRequest(BaseModel):
+    senha_atual: str
+    nova_senha: str
+
+    @field_validator("nova_senha")
+    @classmethod
+    def senha_minima(cls, v: str) -> str:
+        if len(v) < 6:
+            raise ValueError("A nova senha deve ter no mínimo 6 caracteres.")
+        return v
+
+
+# ─── Importação de Alunos ─────────────────────────────────────────────────────
+
+class AlunoImportResult(BaseModel):
+    criados: int
+    nomes: list[str]
+    erros: list[str]
+
+
+# ─── Uploads ──────────────────────────────────────────────────────────────────
+
+class UploadOut(BaseModel):
+    id: str
+    atividade_id: str
+    aluno_id: Optional[str]
+    aluno_nome: Optional[str]
+    storage_path: str
+    content_type: str
+    tipo_arquivo: str
+    signed_url: Optional[str] = None

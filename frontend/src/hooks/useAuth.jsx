@@ -96,8 +96,18 @@ export function AuthProvider({ children }) {
     _clearSession()
   }
 
+  function updateUser(updates) {
+    setUser((prev) => ({ ...prev, ...updates }))
+    const stored = localStorage.getItem('corrigeai_user')
+    if (stored) {
+      try {
+        localStorage.setItem('corrigeai_user', JSON.stringify({ ...JSON.parse(stored), ...updates }))
+      } catch { /* ignore */ }
+    }
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut, updateUser }}>
       {children}
     </AuthContext.Provider>
   )

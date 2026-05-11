@@ -75,6 +75,23 @@ async def upload_file(
     return storage_path
 
 
+async def create_signed_url(storage_path: str, expires_in: int = 3600) -> str:
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.post(
+            f"{settings.supabase_url}/storage/v1/object/sign/{BUCKET}/{storage_path}",
+            json={"expiresIn": expires_in},
+            headers={
+                "Authorization": f"Bearer {settings.supabase_service_role_key}",
+                "apikey": settings.supabase_service_role_key,
+            },
+        )
+        if resp.status_code != 200:
+            raise RuntimeError(f"Signed URL falhou: {resp.status_code} {resp.text}")
+        data = resp.json()
+        relative = data.get("signedURL") or data.get("signedUrl") or data.get("signed_url", "")
+        return f"{settings.supabase_url}/storage/v1{relative}" if relative.startswith("/") else relative
+
+
 async def download_file(storage_path: str) -> bytes:
     async def _do_download():
         async with httpx.AsyncClient(timeout=60) as client:

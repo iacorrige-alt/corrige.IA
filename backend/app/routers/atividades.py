@@ -1,7 +1,17 @@
 import asyncio
+import csv
+import io
 import logging
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
-from app.models.schemas import AtividadeCreate, AtividadeOut, AtividadeUpdate, ResultadoOut
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, Request
+from fastapi.responses import StreamingResponse
+
+from app.models.schemas import (
+    AtividadeCreate, AtividadeOut, AtividadeUpdate,
+    QuestaoCreate, QuestaoOut, QuestaoUpdate,
+    ResultadoOut, UploadOut,
+)
 from app.db.supabase_client import get_supabase
 from app.dependencies import get_current_user
 from app.limiter import limiter
@@ -174,6 +184,196 @@ async def get_atividade(
     if not ativ.data:
         raise HTTPException(status_code=404, detail="Atividade não encontrada.")
     return ativ.data
+
+
+@router.get("/{atividade_id}/resultados/export")
+async def exportar_resultados_csv(
+    atividade_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    supabase = get_supabase()
+    ativ = await asyncio.to_thread(
+        supabase.table("atividades").select("id, nome, questoes(*)")
+        .eq("id", atividade_id).eq("professor_id", current_user["id"]).single().execute
+    )
+    if not ativ.data:
+        raise HTTPException(status_code=404, detail="Atividade não encontrada.")
+
+    questoes = sorted(ativ.data.get("questoes") or [], key=lambda q: q["ordem"])
+
+    resultados = await asyncio.to_thread(
+        supabase.table("resultados")
+        .select("nota_total, alunos(nome), respostas(questao_id, nota)")
+        .eq("atividade_id", atividade_id)
+        .execute
+    )
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    header = ["Aluno", "Nota Total"] + [f"Q{i+1} – {q['enunciado'][:40]}" for i, q in enumerate(questoes)]
+    writer.writerow(header)
+
+    for r in sorted(resultados.data, key=lambda x: (x.get("alunos") or {}).get("nome", "")):
+        aluno_nome = (r.get("alunos") or {}).get("nome", "Desconhecido")
+        nota_total = r.get("nota_total", "")
+        respostas_map = {resp["questao_id"]: resp.get("nota", "") for resp in (r.get("respostas") or [])}
+        notas_questoes = [respostas_map.get(q["id"], "") for q in questoes]
+        writer.writerow([aluno_nome, nota_total] + notas_questoes)
+
+    nome_arquivo = ativ.data["nome"].replace(" ", "_")[:50]
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="resultados_{nome_arquivo}.csv"'},
+    )
+
+
+@router.post("/{atividade_id}/reprocessar", status_code=202)
+async def reprocessar_atividade(
+    atividade_id: str,
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user),
+):
+    from app.services.ai_service import corrigir_atividade
+
+    supabase = get_supabase()
+    ativ = await asyncio.to_thread(
+        supabase.table("atividades").select("id, status")
+        .eq("id", atividade_id).eq("professor_id", current_user["id"]).single().execute
+    )
+    if not ativ.data:
+        raise HTTPException(status_code=404, detail="Atividade não encontrada.")
+    if ativ.data["status"] == "corrigindo":
+        raise HTTPException(status_code=409, detail="Correção já em andamento.")
+
+    uploads = await asyncio.to_thread(
+        supabase.table("uploads").select("id").eq("atividade_id", atividade_id).execute
+    )
+    if not uploads.data:
+        raise HTTPException(status_code=400, detail="Nenhum arquivo enviado para reprocessar.")
+
+    await asyncio.to_thread(
+        supabase.table("resultados").delete().eq("atividade_id", atividade_id).execute
+    )
+    now_utc = datetime.now(timezone.utc).isoformat()
+    await asyncio.to_thread(
+        supabase.table("atividades")
+        .update({"status": "corrigindo", "correcao_iniciada_em": now_utc, "uploads_com_erro": 0})
+        .eq("id", atividade_id).execute
+    )
+    background_tasks.add_task(corrigir_atividade, atividade_id, current_user["id"])
+    return {"message": "Reprocessamento iniciado.", "atividade_id": atividade_id}
+
+
+@router.post("/{atividade_id}/questoes", response_model=QuestaoOut, status_code=201)
+async def adicionar_questao(
+    atividade_id: str,
+    body: QuestaoCreate,
+    current_user: dict = Depends(get_current_user),
+):
+    supabase = get_supabase()
+    ativ = await asyncio.to_thread(
+        supabase.table("atividades").select("id")
+        .eq("id", atividade_id).eq("professor_id", current_user["id"]).single().execute
+    )
+    if not ativ.data:
+        raise HTTPException(status_code=404, detail="Atividade não encontrada.")
+
+    result = await asyncio.to_thread(
+        supabase.table("questoes").insert({
+            "atividade_id": atividade_id,
+            "enunciado": body.enunciado,
+            "gabarito": body.gabarito,
+            "tipo": body.tipo,
+            "peso": body.peso,
+            "ordem": body.ordem,
+        }).execute
+    )
+    return result.data[0]
+
+
+@router.patch("/{atividade_id}/questoes/{questao_id}", response_model=QuestaoOut)
+async def atualizar_questao(
+    atividade_id: str,
+    questao_id: str,
+    body: QuestaoUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    supabase = get_supabase()
+    ativ = await asyncio.to_thread(
+        supabase.table("atividades").select("id")
+        .eq("id", atividade_id).eq("professor_id", current_user["id"]).single().execute
+    )
+    if not ativ.data:
+        raise HTTPException(status_code=404, detail="Atividade não encontrada.")
+
+    updates = body.model_dump(exclude_none=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="Nenhum campo para atualizar.")
+
+    result = await asyncio.to_thread(
+        supabase.table("questoes").update(updates)
+        .eq("id", questao_id).eq("atividade_id", atividade_id).execute
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Questão não encontrada.")
+    return result.data[0]
+
+
+@router.delete("/{atividade_id}/questoes/{questao_id}", status_code=204)
+async def deletar_questao(
+    atividade_id: str,
+    questao_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    supabase = get_supabase()
+    ativ = await asyncio.to_thread(
+        supabase.table("atividades").select("id")
+        .eq("id", atividade_id).eq("professor_id", current_user["id"]).single().execute
+    )
+    if not ativ.data:
+        raise HTTPException(status_code=404, detail="Atividade não encontrada.")
+
+    result = await asyncio.to_thread(
+        supabase.table("questoes").delete()
+        .eq("id", questao_id).eq("atividade_id", atividade_id).execute
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Questão não encontrada.")
+
+
+@router.get("/{atividade_id}/uploads", response_model=list[UploadOut])
+async def listar_uploads(
+    atividade_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    from app.services.storage_service import create_signed_url
+
+    supabase = get_supabase()
+    ativ = await asyncio.to_thread(
+        supabase.table("atividades").select("id")
+        .eq("id", atividade_id).eq("professor_id", current_user["id"]).single().execute
+    )
+    if not ativ.data:
+        raise HTTPException(status_code=404, detail="Atividade não encontrada.")
+
+    uploads = await asyncio.to_thread(
+        supabase.table("uploads")
+        .select("*, alunos(nome)")
+        .eq("atividade_id", atividade_id)
+        .execute
+    )
+
+    result = []
+    for u in uploads.data:
+        aluno = u.pop("alunos", None) or {}
+        try:
+            signed_url = await create_signed_url(u["storage_path"])
+        except Exception:
+            signed_url = None
+        result.append({**u, "aluno_nome": aluno.get("nome"), "signed_url": signed_url})
+    return result
 
 
 @router.get("/{atividade_id}/resultados", response_model=list[ResultadoOut])

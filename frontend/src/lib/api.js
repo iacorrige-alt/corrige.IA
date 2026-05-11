@@ -58,6 +58,9 @@ export const api = {
       request('/auth/refresh', { method: 'POST', body: JSON.stringify({ refresh_token }) }),
     logout: () => request('/auth/logout', { method: 'POST' }),
     me: () => request('/auth/me'),
+    updateProfile: (data) => request('/auth/me', { method: 'PATCH', body: JSON.stringify(data) }),
+    changePassword: (data) =>
+      request('/auth/change-password', { method: 'POST', body: JSON.stringify(data) }),
   },
 
   // ─── Turmas ────────────────────────────────────────────────────────────────
@@ -78,6 +81,24 @@ export const api = {
     update: (id, data) => request(`/alunos/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     delete: (id) => request(`/alunos/${id}`, { method: 'DELETE' }),
     dashboard: (id) => request(`/alunos/${id}/dashboard`),
+    importarCsv: (turmaId, file) => {
+      const token = getToken()
+      const form = new FormData()
+      form.append('file', file)
+      return fetch(`${API_URL}/turmas/${turmaId}/alunos/importar`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      }).then(async (r) => {
+        if (!r.ok) {
+          const e = await r.json().catch(() => ({ detail: r.statusText }))
+          const err = new Error(e.detail || `Erro ${r.status}`)
+          err.status = r.status
+          throw err
+        }
+        return r.json()
+      })
+    },
   },
 
   // ─── Atividades ────────────────────────────────────────────────────────────
@@ -131,6 +152,22 @@ export const api = {
       })
     },
     deleteGabarito: (id) => request(`/atividades/${id}/gabarito`, { method: 'DELETE' }),
+    reprocessar: (id) => request(`/atividades/${id}/reprocessar`, { method: 'POST' }),
+    exportarCsv: async (id) => {
+      const token = getToken()
+      const r = await fetch(`${API_URL}/atividades/${id}/resultados/export`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (!r.ok) throw new Error('Erro ao exportar CSV')
+      return r.blob()
+    },
+    addQuestao: (atividadeId, data) =>
+      request(`/atividades/${atividadeId}/questoes`, { method: 'POST', body: JSON.stringify(data) }),
+    updateQuestao: (atividadeId, questaoId, data) =>
+      request(`/atividades/${atividadeId}/questoes/${questaoId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteQuestao: (atividadeId, questaoId) =>
+      request(`/atividades/${atividadeId}/questoes/${questaoId}`, { method: 'DELETE' }),
+    listarUploads: (id) => request(`/atividades/${id}/uploads`),
     extrairQuestoesPdf: (file) => {
       const token = getToken()
       const form = new FormData()

@@ -1,6 +1,9 @@
 import asyncio
-from fastapi import APIRouter, HTTPException, Depends
-from app.models.schemas import AlunoCreate, AlunoOut, AlunoUpdate, DashboardAluno
+import csv
+import io
+
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
+from app.models.schemas import AlunoCreate, AlunoImportResult, AlunoOut, AlunoUpdate, DashboardAluno
 from app.db.supabase_client import get_supabase
 from app.dependencies import get_current_user
 
@@ -62,6 +65,58 @@ async def criar_aluno(
     if not result.data:
         raise HTTPException(status_code=500, detail="Erro ao criar aluno.")
     return result.data[0]
+
+
+@router.post("/turmas/{turma_id}/alunos/importar", response_model=AlunoImportResult, status_code=201)
+async def importar_alunos_csv(
+    turma_id: str,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+):
+    supabase = get_supabase()
+    turma = await asyncio.to_thread(
+        supabase.table("turmas").select("id")
+        .eq("id", turma_id).eq("professor_id", current_user["id"]).single().execute
+    )
+    if not turma.data:
+        raise HTTPException(status_code=404, detail="Turma não encontrada.")
+
+    content = await file.read()
+    text = content.decode("utf-8-sig", errors="replace")
+    reader = csv.reader(io.StringIO(text))
+
+    nomes: list[str] = []
+    for i, row in enumerate(reader):
+        if not row or not row[0].strip():
+            continue
+        name = row[0].strip()
+        if i == 0 and name.lower() in ("nome", "aluno", "alunos", "name", "student", "students"):
+            continue
+        if 1 <= len(name) <= 100:
+            nomes.append(name)
+
+    if not nomes:
+        raise HTTPException(status_code=400, detail="Nenhum nome encontrado no arquivo.")
+
+    criados: list[str] = []
+    erros: list[str] = []
+    for nome in nomes[:200]:
+        parts = nome.split()
+        initials = (parts[0][0] + parts[-1][0]).upper() if len(parts) >= 2 else parts[0][:2].upper()
+        try:
+            result = await asyncio.to_thread(
+                supabase.table("alunos")
+                .insert({"turma_id": turma_id, "nome": nome, "initials": initials})
+                .execute
+            )
+            if result.data:
+                criados.append(nome)
+            else:
+                erros.append(nome)
+        except Exception:
+            erros.append(nome)
+
+    return AlunoImportResult(criados=len(criados), nomes=criados, erros=erros)
 
 
 @router.patch("/alunos/{aluno_id}", response_model=AlunoOut)

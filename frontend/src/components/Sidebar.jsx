@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Users, FileText, LogOut, Brain, X } from 'lucide-react'
+import { LayoutDashboard, Users, FileText, LogOut, Brain, X, Settings } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 
 const links = [
@@ -88,6 +88,19 @@ export default function Sidebar({ isOpen, onClose }) {
               <p className="text-xs text-gray-500 truncate">{user?.email || ''}</p>
             </div>
           </div>
+          <NavLink
+            to="/perfil"
+            className={({ isActive }) =>
+              `w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
+                isActive
+                  ? 'bg-indigo-50 text-indigo-700'
+                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+              }`
+            }
+          >
+            <Settings className="h-5 w-5" />
+            Meu Perfil
+          </NavLink>
           <button
             onClick={signOut}
             className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors"

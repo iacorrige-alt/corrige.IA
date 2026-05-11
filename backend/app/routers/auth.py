@@ -1,12 +1,17 @@
 import asyncio
 import logging
 
+import httpx
 from fastapi import APIRouter, HTTPException, status, Depends
 from supabase_auth.errors import AuthApiError
 
+from app.config import settings
 from app.db.supabase_client import get_supabase
 from app.dependencies import get_current_user
-from app.models.schemas import AuthResponse, LoginRequest, ProfessorOut, RefreshRequest, RegisterRequest
+from app.models.schemas import (
+    AuthResponse, ChangePasswordRequest, LoginRequest,
+    ProfessorOut, ProfessorUpdate, RefreshRequest, RegisterRequest,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -162,3 +167,51 @@ async def me(current_user: dict = Depends(get_current_user)):
     if not prof.data:
         raise HTTPException(status_code=404, detail="Professor não encontrado.")
     return prof.data
+
+
+@router.patch("/me", response_model=ProfessorOut)
+async def atualizar_perfil(
+    body: ProfessorUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    supabase = get_supabase()
+    result = await asyncio.to_thread(
+        supabase.table("professores")
+        .update({"nome": body.nome})
+        .eq("id", current_user["id"])
+        .execute
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Professor não encontrado.")
+    return result.data[0]
+
+
+@router.post("/change-password")
+async def change_password(
+    body: ChangePasswordRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.post(
+            f"{settings.supabase_url}/auth/v1/token?grant_type=password",
+            json={"email": current_user["email"], "password": body.senha_atual},
+            headers={
+                "apikey": settings.supabase_service_role_key,
+                "Content-Type": "application/json",
+            },
+        )
+    if resp.status_code != 200:
+        raise HTTPException(status_code=401, detail="Senha atual incorreta.")
+
+    supabase = get_supabase()
+    try:
+        await asyncio.to_thread(
+            supabase.auth.admin.update_user_by_id,
+            current_user["id"],
+            {"password": body.nova_senha},
+        )
+    except Exception as exc:
+        logger.error("Erro ao alterar senha para %s: %s", current_user["id"], exc)
+        raise HTTPException(status_code=500, detail="Erro ao alterar a senha.")
+
+    return {"message": "Senha alterada com sucesso."}

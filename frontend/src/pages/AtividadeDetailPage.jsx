@@ -1,10 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Upload, AlertTriangle, CheckCircle, XCircle, MinusCircle, Brain, FileText, Trash2, Sparkles } from 'lucide-react'
+import {
+  ArrowLeft, Upload, AlertTriangle, CheckCircle, XCircle, MinusCircle,
+  Brain, FileText, Trash2, Sparkles, Download, RefreshCw,
+  Plus, Pencil, Check, X, ListChecks, Eye,
+} from 'lucide-react'
 import { api } from '../lib/api'
 import Spinner from '../components/Spinner'
 import Badge from '../components/Badge'
+import Modal from '../components/Modal'
 
 function ResultadoCard({ resultado }) {
   const [open, setOpen] = useState(false)
@@ -81,9 +86,18 @@ export default function AtividadeDetailPage() {
   const [gabaritoError, setGabaritoError] = useState('')
   const fileRef = useRef()
   const gabaritoRef = useRef()
-
   const [gabaritoUploading, setGabaritoUploading] = useState(false)
   const [timedOut, setTimedOut] = useState(false)
+
+  // Questões
+  const [editingQuestaoId, setEditingQuestaoId] = useState(null)
+  const [editQuestao, setEditQuestao] = useState({})
+  const [addQuestaoModal, setAddQuestaoModal] = useState(false)
+  const [newQuestao, setNewQuestao] = useState({ enunciado: '', gabarito: '', tipo: 'dissertativa', peso: 1 })
+  const [questaoError, setQuestaoError] = useState('')
+
+  // Uploads list
+  const [showUploads, setShowUploads] = useState(false)
 
   const { data: atividade } = useQuery({
     queryKey: ['atividade', id],
@@ -131,6 +145,63 @@ export default function AtividadeDetailPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['atividade', id] }),
     onError: (e) => setGabaritoError(e.message),
   })
+
+  const reprocessMutation = useMutation({
+    mutationFn: () => api.atividades.reprocessar(id),
+    onSuccess: () => {
+      pollCount.current = 0
+      setTimedOut(false)
+      qc.invalidateQueries({ queryKey: ['status', id] })
+      qc.invalidateQueries({ queryKey: ['resultados', id] })
+    },
+  })
+
+  const addQuestaoMutation = useMutation({
+    mutationFn: (data) => api.atividades.addQuestao(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['atividade', id] })
+      setAddQuestaoModal(false)
+      setNewQuestao({ enunciado: '', gabarito: '', tipo: 'dissertativa', peso: 1 })
+      setQuestaoError('')
+    },
+    onError: (e) => setQuestaoError(e.message),
+  })
+
+  const updateQuestaoMutation = useMutation({
+    mutationFn: ({ questaoId, data }) => api.atividades.updateQuestao(id, questaoId, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['atividade', id] })
+      setEditingQuestaoId(null)
+    },
+  })
+
+  const deleteQuestaoMutation = useMutation({
+    mutationFn: (questaoId) => api.atividades.deleteQuestao(id, questaoId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['atividade', id] }),
+  })
+
+  const { data: uploads = [], isLoading: loadingUploads } = useQuery({
+    queryKey: ['uploads', id],
+    queryFn: () => api.atividades.listarUploads(id),
+    enabled: showUploads,
+  })
+
+  async function handleExportCsv() {
+    try {
+      const blob = await api.atividades.exportarCsv(id)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `resultados_${atividade?.nome || id}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch { /* ignore */ }
+  }
+
+  function startEditQuestao(q) {
+    setEditingQuestaoId(q.id)
+    setEditQuestao({ enunciado: q.enunciado, gabarito: q.gabarito || '', tipo: q.tipo, peso: q.peso })
+  }
 
   function handleDeleteGabarito() {
     if (!confirm('Remover o gabarito? Esta ação não pode ser desfeita.')) return
@@ -238,6 +309,96 @@ export default function AtividadeDetailPage() {
         </>
       )}
 
+      {/* Questões */}
+      {atividade && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-6 mb-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <ListChecks className="h-5 w-5 text-indigo-500" />
+              <h2 className="font-semibold text-gray-900">Questões ({(atividade.questoes || []).length})</h2>
+            </div>
+            <button
+              onClick={() => { setAddQuestaoModal(true); setQuestaoError('') }}
+              className="flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-800 px-3 py-1.5 rounded-lg hover:bg-indigo-50"
+            >
+              <Plus className="h-4 w-4" /> Questão
+            </button>
+          </div>
+
+          {status?.status !== 'pendente' && (
+            <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-xl text-xs text-yellow-800">
+              Editar questões após correção requer reprocessamento para atualizar os resultados.
+            </div>
+          )}
+
+          {(atividade.questoes || []).length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-4">Nenhuma questão cadastrada.</p>
+          ) : (
+            <div className="space-y-2">
+              {[...(atividade.questoes || [])].sort((a, b) => a.ordem - b.ordem).map((q, i) => (
+                <div key={q.id} className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                  {editingQuestaoId === q.id ? (
+                    <div className="space-y-2">
+                      <textarea
+                        value={editQuestao.enunciado}
+                        onChange={(e) => setEditQuestao({ ...editQuestao, enunciado: e.target.value })}
+                        className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                        rows={2}
+                        placeholder="Enunciado"
+                      />
+                      <input
+                        value={editQuestao.gabarito}
+                        onChange={(e) => setEditQuestao({ ...editQuestao, gabarito: e.target.value })}
+                        className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
+                        placeholder="Gabarito (opcional)"
+                      />
+                      <div className="flex gap-2 items-center">
+                        <input
+                          type="number" min="0.1" step="0.1"
+                          value={editQuestao.peso}
+                          onChange={(e) => setEditQuestao({ ...editQuestao, peso: parseFloat(e.target.value) })}
+                          className="w-20 text-sm border border-gray-300 rounded-lg px-2 py-1.5 outline-none"
+                          placeholder="Peso"
+                        />
+                        <div className="flex gap-1 ml-auto">
+                          <button onClick={() => updateQuestaoMutation.mutate({ questaoId: q.id, data: editQuestao })}
+                            disabled={updateQuestaoMutation.isPending}
+                            className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg">
+                            {updateQuestaoMutation.isPending ? <Spinner size="sm" /> : <Check className="h-4 w-4" />}
+                          </button>
+                          <button onClick={() => setEditingQuestaoId(null)} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-lg">
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-start gap-3">
+                      <span className="text-xs font-bold text-gray-400 mt-0.5 w-5 flex-shrink-0">Q{i + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-800">{q.enunciado}</p>
+                        {q.gabarito && <p className="text-xs text-gray-400 mt-1">Gabarito: {q.gabarito}</p>}
+                        <p className="text-xs text-gray-400">Peso: {q.peso}</p>
+                      </div>
+                      <div className="flex gap-1 flex-shrink-0">
+                        <button onClick={() => startEditQuestao(q)}
+                          className="p-1.5 text-gray-300 hover:text-indigo-500 hover:bg-indigo-50 rounded-lg">
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button onClick={() => { if (confirm('Excluir questão?')) deleteQuestaoMutation.mutate(q.id) }}
+                          className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Gabarito PDF */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-6 mb-4">
         <div className="flex items-center gap-2 mb-1">
@@ -343,21 +504,82 @@ export default function AtividadeDetailPage() {
           className="hidden"
           onChange={handleUpload}
         />
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+            className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50"
+          >
+            {uploading ? <Spinner size="sm" /> : <Upload className="h-5 w-5" />}
+            {uploading ? 'Enviando...' : 'Selecionar Arquivos'}
+          </button>
+
+          {(status?.status === 'concluida' || status?.status === 'erro') && (
+            <button
+              onClick={() => { if (confirm('Reprocessar a correção? Os resultados atuais serão apagados.')) reprocessMutation.mutate() }}
+              disabled={reprocessMutation.isPending}
+              className="flex items-center gap-2 px-4 py-2.5 border border-orange-300 text-orange-600 rounded-xl font-medium hover:bg-orange-50 transition-colors disabled:opacity-50"
+            >
+              {reprocessMutation.isPending ? <Spinner size="sm" /> : <RefreshCw className="h-4 w-4" />}
+              Reprocessar
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Uploads enviados */}
+      <div className="mb-6">
         <button
-          onClick={() => fileRef.current?.click()}
-          disabled={uploading}
-          className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50 w-full sm:w-auto justify-center sm:justify-start"
+          onClick={() => setShowUploads((v) => !v)}
+          className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700"
         >
-          {uploading ? <Spinner size="sm" /> : <Upload className="h-5 w-5" />}
-          {uploading ? 'Enviando...' : 'Selecionar Arquivos'}
+          <Eye className="h-4 w-4" />
+          {showUploads ? 'Ocultar arquivos enviados' : 'Ver arquivos enviados'}
         </button>
+        {showUploads && (
+          <div className="mt-3 bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            {loadingUploads ? (
+              <div className="flex justify-center py-4"><Spinner /></div>
+            ) : uploads.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-2">Nenhum arquivo enviado.</p>
+            ) : (
+              <div className="space-y-2">
+                {uploads.map((u) => (
+                  <div key={u.id} className="flex items-center gap-3 py-1.5">
+                    <FileText className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-700 truncate">{u.aluno_nome || 'Aluno não identificado'}</p>
+                      <p className="text-xs text-gray-400">{u.tipo_arquivo} · {u.content_type}</p>
+                    </div>
+                    {u.signed_url && (
+                      <a href={u.signed_url} target="_blank" rel="noopener noreferrer"
+                        className="text-xs text-indigo-600 hover:underline flex-shrink-0">
+                        Abrir
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Results */}
       <div>
-        <h2 className="font-semibold text-gray-900 mb-4">
-          Resultados {resultados.length > 0 && `(${resultados.length} alunos)`}
-        </h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-semibold text-gray-900">
+            Resultados {resultados.length > 0 && `(${resultados.length} alunos)`}
+          </h2>
+          {resultados.length > 0 && (
+            <button
+              onClick={handleExportCsv}
+              className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-50"
+            >
+              <Download className="h-4 w-4" /> Exportar CSV
+            </button>
+          )}
+        </div>
 
         {loadingResultados ? (
           <div className="flex justify-center py-12"><Spinner /></div>
@@ -374,6 +596,78 @@ export default function AtividadeDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Modal: adicionar questão */}
+      <Modal open={addQuestaoModal} onClose={() => setAddQuestaoModal(false)} title="Nova Questão">
+        <div className="space-y-3">
+          {questaoError && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{questaoError}</div>}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Enunciado</label>
+            <textarea
+              value={newQuestao.enunciado}
+              onChange={(e) => setNewQuestao({ ...newQuestao, enunciado: e.target.value })}
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+              placeholder="Digite o enunciado da questão"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Gabarito (opcional)</label>
+            <input
+              value={newQuestao.gabarito}
+              onChange={(e) => setNewQuestao({ ...newQuestao, gabarito: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="Resposta esperada"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
+              <select
+                value={newQuestao.tipo}
+                onChange={(e) => setNewQuestao({ ...newQuestao, tipo: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm outline-none"
+              >
+                <option value="dissertativa">Dissertativa</option>
+                <option value="multipla_escolha">Múltipla escolha</option>
+                <option value="verdadeiro_falso">Verdadeiro/Falso</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Peso</label>
+              <input
+                type="number" min="0.1" step="0.1"
+                value={newQuestao.peso}
+                onChange={(e) => setNewQuestao({ ...newQuestao, peso: parseFloat(e.target.value) })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm outline-none"
+              />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={() => setAddQuestaoModal(false)}
+              className="flex-1 py-2.5 border border-gray-300 rounded-xl text-sm hover:bg-gray-50">
+              Cancelar
+            </button>
+            <button
+              onClick={() => {
+                if (!newQuestao.enunciado.trim()) { setQuestaoError('Enunciado obrigatório.'); return }
+                addQuestaoMutation.mutate({
+                  enunciado: newQuestao.enunciado,
+                  gabarito: newQuestao.gabarito || null,
+                  tipo: newQuestao.tipo,
+                  peso: newQuestao.peso,
+                  ordem: (atividade?.questoes?.length || 0) + 1,
+                })
+              }}
+              disabled={addQuestaoMutation.isPending}
+              className="flex-1 bg-indigo-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {addQuestaoMutation.isPending && <Spinner size="sm" />}
+              Adicionar
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

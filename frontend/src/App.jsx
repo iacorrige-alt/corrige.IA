@@ -13,6 +13,7 @@ import AtividadesPage from './pages/AtividadesPage'
 import AtividadeDetailPage from './pages/AtividadeDetailPage'
 import AlunoDashboardPage from './pages/AlunoDashboardPage'
 import TurmaDashboardPage from './pages/TurmaDashboardPage'
+import ProfilePage from './pages/ProfilePage'
 
 function ProtectedLayout() {
   const { user, loading } = useAuth()
@@ -76,6 +77,7 @@ export default function App() {
             <Route path="/atividades/:id" element={<AtividadeDetailPage />} />
             <Route path="/alunos/:id" element={<AlunoDashboardPage />} />
             <Route path="/turmas/:id/dashboard" element={<TurmaDashboardPage />} />
+            <Route path="/perfil" element={<ProfilePage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

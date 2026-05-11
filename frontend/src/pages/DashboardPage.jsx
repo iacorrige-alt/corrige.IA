@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Users, FileText, CheckCircle, Clock, TrendingUp } from 'lucide-react'
+import { Users, FileText, CheckCircle, Clock, TrendingUp, Zap } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../hooks/useAuth'
 import Spinner from '../components/Spinner'
@@ -34,11 +34,21 @@ export default function DashboardPage() {
     queryFn: api.atividades.list,
   })
 
+  const { data: professor } = useQuery({
+    queryKey: ['me'],
+    queryFn: api.auth.me,
+  })
+
   const totalAlunos = turmas.reduce((sum, t) => sum + (t.total_alunos || 0), 0)
   const concluidas = atividades.filter((a) => a.status === 'concluida').length
   const corrigindo = atividades.filter((a) => a.status === 'corrigindo').length
   const pendentes = atividades.filter((a) => a.status === 'pendente').length
   const loading = loadingTurmas || loadingAtividades
+
+  const tokensUsados = professor?.tokens_usados ?? 0
+  const limiteTokens = professor?.limite_tokens ?? 0
+  const tokenPct = limiteTokens > 0 ? Math.min((tokensUsados / limiteTokens) * 100, 100) : 0
+  const tokenColor = tokenPct >= 90 ? 'bg-red-500' : tokenPct >= 70 ? 'bg-yellow-500' : 'bg-purple-500'
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto">
@@ -56,8 +66,8 @@ export default function DashboardPage() {
         </div>
       ) : (
         <>
-          {/* Stats — 2 cols mobile, 4 cols desktop */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
+          {/* Stats — 2 cols mobile, 3 cols md, 5 cols xl */}
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4 mb-6 sm:mb-8">
             <StatCard icon={Users} label="Total de Alunos" value={totalAlunos}
               color="bg-indigo-500" sub={`${turmas.length} turmas`} />
             <StatCard icon={FileText} label="Atividades" value={atividades.length}
@@ -67,6 +77,9 @@ export default function DashboardPage() {
             <StatCard icon={Clock} label="Em andamento" value={corrigindo + pendentes}
               color="bg-orange-400"
               sub={corrigindo > 0 ? `${corrigindo} corrigindo` : undefined} />
+            <StatCard icon={Zap} label="Tokens IA" value={`${tokenPct.toFixed(0)}%`}
+              color={tokenColor}
+              sub={`${tokensUsados.toLocaleString('pt-BR')} / ${limiteTokens.toLocaleString('pt-BR')}`} />
           </div>
 
           {/* Recent cards — stacked on mobile, 2-col on desktop */}

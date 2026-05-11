@@ -26,6 +26,9 @@ export default function AtividadesPage() {
   const [importing, setImporting] = useState(false)
   const [importError, setImportError] = useState('')
   const importRef = useRef()
+  const [filterTurma, setFilterTurma] = useState('')
+  const [filterStatus, setFilterStatus] = useState('')
+  const [showCount, setShowCount] = useState(20)
 
   const { data: atividades = [], isLoading } = useQuery({
     queryKey: ['atividades'],
@@ -126,57 +129,117 @@ export default function AtividadesPage() {
         </div>
       ) : (
         <>
-          {/* Mobile: card list */}
-          <div className="sm:hidden space-y-3">
-            {atividades.map((a) => (
-              <Link
-                key={a.id}
-                to={`/atividades/${a.id}`}
-                className="flex items-center gap-3 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 hover:shadow-md transition-shadow"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{a.nome}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    {new Date(a.data_criacao).toLocaleDateString('pt-BR')} · {a.tipo} · {a.total_questoes ?? a.questoes?.length ?? 0} questões
-                  </p>
-                </div>
-                <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                  <Badge type={a.status} />
-                  <ChevronRight className="h-4 w-4 text-gray-300" />
-                </div>
-              </Link>
-            ))}
-          </div>
-
-          {/* Desktop: table */}
-          <div className="hidden sm:block bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="grid grid-cols-5 gap-4 px-6 py-3 bg-gray-50 border-b text-xs font-medium text-gray-500 uppercase tracking-wide">
-              <span className="col-span-2">Atividade</span>
-              <span>Tipo</span>
-              <span>Status</span>
-              <span className="text-right">Ações</span>
-            </div>
-            {atividades.map((a) => (
-              <div key={a.id} className="grid grid-cols-5 gap-4 px-6 py-4 border-b border-gray-50 last:border-0 items-center hover:bg-gray-50">
-                <div className="col-span-2 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{a.nome}</p>
-                  <p className="text-xs text-gray-400">
-                    {new Date(a.data_criacao).toLocaleDateString('pt-BR')} · {a.total_questoes ?? a.questoes?.length ?? 0} questões
-                  </p>
-                </div>
-                <span className="text-sm text-gray-600 capitalize">{a.tipo}</span>
-                <Badge type={a.status} />
-                <div className="flex items-center justify-end">
-                  <Link
-                    to={`/atividades/${a.id}`}
-                    className="flex items-center gap-1 text-xs text-indigo-600 hover:underline"
+          {/* Filtros */}
+          {(() => {
+            const filtered = atividades
+              .filter((a) => !filterTurma || a.turma_id === filterTurma)
+              .filter((a) => !filterStatus || a.status === filterStatus)
+            const visible = filtered.slice(0, showCount)
+            return (
+              <>
+                <div className="flex flex-col sm:flex-row gap-2 mb-4">
+                  <select
+                    value={filterTurma}
+                    onChange={(e) => { setFilterTurma(e.target.value); setShowCount(20) }}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-xl text-sm outline-none bg-white"
                   >
-                    Ver resultados <ChevronRight className="h-3.5 w-3.5" />
-                  </Link>
+                    <option value="">Todas as turmas</option>
+                    {turmas.map((t) => <option key={t.id} value={t.id}>{t.nome} — {t.disciplina}</option>)}
+                  </select>
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => { setFilterStatus(e.target.value); setShowCount(20) }}
+                    className="flex-1 sm:max-w-[180px] px-3 py-2 border border-gray-300 rounded-xl text-sm outline-none bg-white"
+                  >
+                    <option value="">Todos os status</option>
+                    <option value="pendente">Pendente</option>
+                    <option value="corrigindo">Corrigindo</option>
+                    <option value="concluida">Concluída</option>
+                    <option value="erro">Erro</option>
+                  </select>
+                  {(filterTurma || filterStatus) && (
+                    <button
+                      onClick={() => { setFilterTurma(''); setFilterStatus(''); setShowCount(20) }}
+                      className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 border border-gray-300 rounded-xl bg-white"
+                    >
+                      Limpar
+                    </button>
+                  )}
                 </div>
-              </div>
-            ))}
-          </div>
+
+                {filtered.length === 0 ? (
+                  <div className="text-center py-16 text-gray-400 text-sm">
+                    Nenhuma atividade com esses filtros.
+                  </div>
+                ) : (
+                  <>
+                    {/* Mobile: card list */}
+                    <div className="sm:hidden space-y-3">
+                      {visible.map((a) => (
+                        <Link
+                          key={a.id}
+                          to={`/atividades/${a.id}`}
+                          className="flex items-center gap-3 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 hover:shadow-md transition-shadow"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">{a.nome}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              {new Date(a.data_criacao).toLocaleDateString('pt-BR')} · {a.tipo} · {a.total_questoes ?? 0} questões
+                            </p>
+                          </div>
+                          <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                            <Badge type={a.status} />
+                            <ChevronRight className="h-4 w-4 text-gray-300" />
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+
+                    {/* Desktop: table */}
+                    <div className="hidden sm:block bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                      <div className="grid grid-cols-5 gap-4 px-6 py-3 bg-gray-50 border-b text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        <span className="col-span-2">Atividade</span>
+                        <span>Tipo</span>
+                        <span>Status</span>
+                        <span className="text-right">Ações</span>
+                      </div>
+                      {visible.map((a) => (
+                        <div key={a.id} className="grid grid-cols-5 gap-4 px-6 py-4 border-b border-gray-50 last:border-0 items-center hover:bg-gray-50">
+                          <div className="col-span-2 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">{a.nome}</p>
+                            <p className="text-xs text-gray-400">
+                              {new Date(a.data_criacao).toLocaleDateString('pt-BR')} · {a.total_questoes ?? 0} questões
+                            </p>
+                          </div>
+                          <span className="text-sm text-gray-600 capitalize">{a.tipo}</span>
+                          <Badge type={a.status} />
+                          <div className="flex items-center justify-end">
+                            <Link
+                              to={`/atividades/${a.id}`}
+                              className="flex items-center gap-1 text-xs text-indigo-600 hover:underline"
+                            >
+                              Ver resultados <ChevronRight className="h-3.5 w-3.5" />
+                            </Link>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {filtered.length > showCount && (
+                      <div className="flex justify-center mt-4">
+                        <button
+                          onClick={() => setShowCount((n) => n + 20)}
+                          className="px-5 py-2 text-sm text-indigo-600 border border-indigo-200 rounded-xl hover:bg-indigo-50"
+                        >
+                          Mostrar mais ({filtered.length - showCount} restantes)
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
+            )
+          })()}
         </>
       )}
 
