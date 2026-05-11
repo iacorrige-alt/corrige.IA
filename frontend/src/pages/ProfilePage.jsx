@@ -18,7 +18,7 @@ function Section({ icon: Icon, title, children }) {
 }
 
 export default function ProfilePage() {
-  const { user, updateUser } = useAuth()
+  const { user, updateUser, signOut } = useAuth()
   const qc = useQueryClient()
 
   const { data: professor, isLoading } = useQuery({
@@ -69,10 +69,11 @@ export default function ProfilePage() {
     setSenhaMsg(null)
     try {
       await api.auth.changePassword({ senha_atual: senhaAtual, nova_senha: novaSenha })
-      setSenhaMsg({ ok: true, text: 'Senha alterada com sucesso.' })
+      setSenhaMsg({ ok: true, text: 'Senha alterada! Você será desconectado para entrar com a nova senha.' })
       setSenhaAtual('')
       setNovaSenha('')
       setConfirmSenha('')
+      setTimeout(() => signOut(), 2500)
     } catch (err) {
       setSenhaMsg({ ok: false, text: err.message || 'Erro ao alterar senha.' })
     } finally {
