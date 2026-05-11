@@ -5,6 +5,7 @@ import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, Request
+from fastapi import Response
 from fastapi.responses import StreamingResponse
 
 from app.models.schemas import (
@@ -221,11 +222,11 @@ async def exportar_resultados_csv(
         notas_questoes = [respostas_map.get(q["id"], "") for q in questoes]
         writer.writerow([aluno_nome, nota_total] + notas_questoes)
 
-    # BOM UTF-8 garante abertura correta no Excel
-    csv_bytes = "﻿".encode("utf-8") + output.getvalue().encode("utf-8")
+    # utf-8-sig = UTF-8 com BOM — garante abertura correta no Excel
+    csv_bytes = output.getvalue().encode("utf-8-sig")
     nome_arquivo = ativ.data["nome"].replace(" ", "_")[:50]
-    return StreamingResponse(
-        iter([csv_bytes]),
+    return Response(
+        content=csv_bytes,
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="resultados_{nome_arquivo}.csv"'},
     )
