@@ -211,7 +211,7 @@ async def exportar_resultados_csv(
     output = io.StringIO()
     writer = csv.writer(output)
 
-    header = ["Aluno", "Nota Total"] + [f"Q{i+1} – {q['enunciado'][:40]}" for i, q in enumerate(questoes)]
+    header = ["Aluno", "Nota Total"] + [f"Q{i+1} - {q['enunciado'][:40]}" for i, q in enumerate(questoes)]
     writer.writerow(header)
 
     for r in sorted(resultados.data, key=lambda x: (x.get("alunos") or {}).get("nome", "")):
@@ -221,9 +221,11 @@ async def exportar_resultados_csv(
         notas_questoes = [respostas_map.get(q["id"], "") for q in questoes]
         writer.writerow([aluno_nome, nota_total] + notas_questoes)
 
+    # BOM UTF-8 garante abertura correta no Excel
+    csv_bytes = "﻿".encode("utf-8") + output.getvalue().encode("utf-8")
     nome_arquivo = ativ.data["nome"].replace(" ", "_")[:50]
     return StreamingResponse(
-        iter([output.getvalue()]),
+        iter([csv_bytes]),
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="resultados_{nome_arquivo}.csv"'},
     )
