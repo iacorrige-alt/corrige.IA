@@ -33,6 +33,10 @@ export default function AtividadesPage() {
   const { data: atividades = [], isLoading } = useQuery({
     queryKey: ['atividades'],
     queryFn: api.atividades.list,
+    refetchInterval: (query) => {
+      const list = query.state.data ?? []
+      return list.some((a) => a.status === 'corrigindo') ? 8000 : false
+    },
   })
 
   const { data: turmas = [] } = useQuery({

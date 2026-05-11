@@ -130,13 +130,12 @@ export default function AtividadeDetailPage() {
   })
 
   useEffect(() => {
-    if (status?.status === 'concluida') {
+    if (status?.status === 'concluida' || status?.status === 'erro') {
       pollCount.current = 0
       setTimedOut(false)
       qc.invalidateQueries({ queryKey: ['resultados', id] })
-    } else if (status?.status === 'erro') {
-      pollCount.current = 0
-      setTimedOut(false)
+      qc.invalidateQueries({ queryKey: ['atividade', id] })
+      qc.invalidateQueries({ queryKey: ['atividades'] })
     }
   }, [status?.status, id, qc])
 

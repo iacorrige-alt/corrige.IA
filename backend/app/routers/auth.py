@@ -203,15 +203,18 @@ async def change_password(
     if resp.status_code != 200:
         raise HTTPException(status_code=401, detail="Senha atual incorreta.")
 
-    supabase = get_supabase()
-    try:
-        await asyncio.to_thread(
-            supabase.auth.admin.update_user_by_id,
-            current_user["id"],
-            {"password": body.nova_senha},
+    async with httpx.AsyncClient(timeout=15) as client:
+        update_resp = await client.put(
+            f"{settings.supabase_url}/auth/v1/admin/users/{current_user['id']}",
+            json={"password": body.nova_senha},
+            headers={
+                "apikey": settings.supabase_service_role_key,
+                "Authorization": f"Bearer {settings.supabase_service_role_key}",
+                "Content-Type": "application/json",
+            },
         )
-    except Exception as exc:
-        logger.error("Erro ao alterar senha para %s: %s", current_user["id"], exc)
+    if update_resp.status_code != 200:
+        logger.error("Erro ao alterar senha para %s: %s %s", current_user["id"], update_resp.status_code, update_resp.text)
         raise HTTPException(status_code=500, detail="Erro ao alterar a senha.")
 
     return {"message": "Senha alterada com sucesso."}

@@ -1,10 +1,78 @@
 import { useQuery } from '@tanstack/react-query'
-import { Users, FileText, CheckCircle, Clock, TrendingUp, Zap } from 'lucide-react'
+import { Users, FileText, CheckCircle, Clock, TrendingUp, Zap, ArrowRight } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../hooks/useAuth'
 import Spinner from '../components/Spinner'
 import Badge from '../components/Badge'
 import { Link } from 'react-router-dom'
+
+const STEPS = [
+  {
+    n: '1',
+    title: 'Crie uma turma',
+    desc: 'Organize seus alunos por turma e disciplina.',
+    to: '/turmas',
+    cta: 'Ir para Turmas',
+    color: 'bg-indigo-500',
+  },
+  {
+    n: '2',
+    title: 'Adicione os alunos',
+    desc: 'Cadastre manualmente ou importe uma lista CSV.',
+    to: '/turmas',
+    cta: 'Adicionar alunos',
+    color: 'bg-blue-500',
+  },
+  {
+    n: '3',
+    title: 'Crie uma atividade',
+    desc: 'Informe as questões e, opcionalmente, o gabarito.',
+    to: '/atividades',
+    cta: 'Nova atividade',
+    color: 'bg-violet-500',
+  },
+  {
+    n: '4',
+    title: 'Envie as provas e corrija',
+    desc: 'Faça upload dos PDFs ou fotos e a IA corrige automaticamente.',
+    to: '/atividades',
+    cta: 'Ver atividades',
+    color: 'bg-green-500',
+  },
+]
+
+function GettingStarted() {
+  return (
+    <div className="max-w-2xl mx-auto">
+      <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-5 sm:p-8 mb-6 text-center">
+        <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <Zap className="h-6 w-6 text-white" />
+        </div>
+        <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-1">Bem-vindo ao CorrigeAI!</h2>
+        <p className="text-sm text-gray-500">Siga os 4 passos abaixo para fazer sua primeira correção automática.</p>
+      </div>
+
+      <div className="space-y-3">
+        {STEPS.map((s) => (
+          <Link
+            key={s.n}
+            to={s.to}
+            className="flex items-center gap-4 bg-white border border-gray-100 rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all group"
+          >
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0 ${s.color}`}>
+              {s.n}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-gray-900 text-sm">{s.title}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{s.desc}</p>
+            </div>
+            <ArrowRight className="h-4 w-4 text-gray-300 group-hover:text-indigo-500 transition-colors flex-shrink-0" />
+          </Link>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 function StatCard({ icon: Icon, label, value, color, sub }) {
   return (
@@ -64,6 +132,8 @@ export default function DashboardPage() {
         <div className="flex justify-center py-20">
           <Spinner size="lg" />
         </div>
+      ) : turmas.length === 0 ? (
+        <GettingStarted />
       ) : (
         <>
           {/* Stats — 2 cols mobile, 3 cols md, 5 cols xl */}
