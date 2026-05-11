@@ -24,7 +24,7 @@ STUCK_THRESHOLD = timedelta(minutes=15)
 
 
 @router.post("/{atividade_id}/upload", response_model=UploadResponse)
-@limiter.limit("5/minute")
+@limiter.limit("30/minute")
 async def upload_provas(
     request: Request,
     atividade_id: str,

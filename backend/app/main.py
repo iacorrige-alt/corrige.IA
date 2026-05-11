@@ -1,7 +1,9 @@
+import asyncio
 import json
 import logging
 import logging.config
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -65,6 +67,15 @@ app = FastAPI(
     description="API de correção automática de provas com IA",
     version="1.0.0",
 )
+
+
+@app.on_event("startup")
+async def _configure_thread_pool():
+    # Padrão do asyncio: min(32, cpu_count+4) — no Railway 1vCPU = apenas 5 threads.
+    # Com correções concorrentes (muitas chamadas asyncio.to_thread ao Supabase),
+    # 5 threads esgotam rápido. 40 threads acomodam ~10 usuários simultâneos.
+    loop = asyncio.get_running_loop()
+    loop.set_default_executor(ThreadPoolExecutor(max_workers=40))
 
 _access_logger = logging.getLogger("corrigeai.access")
 

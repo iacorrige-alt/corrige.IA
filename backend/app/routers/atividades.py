@@ -153,7 +153,7 @@ async def deletar_atividade(
 
 
 @router.post("/extrair-questoes-pdf")
-@limiter.limit("3/minute")
+@limiter.limit("20/minute")
 async def extrair_questoes_do_pdf(
     request: Request,
     file: UploadFile = File(...),
