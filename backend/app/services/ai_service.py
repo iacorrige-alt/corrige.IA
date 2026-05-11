@@ -45,6 +45,10 @@ _OPENAI_RETRYABLE = (openai.RateLimitError, openai.APIStatusError, openai.APICon
 # Definido em corrigir_atividade / extrair_questoes_pdf e lido por _openai_call.
 _token_accumulator: ContextVar[list[int] | None] = ContextVar("token_accumulator", default=None)
 
+# 15 slots × ~8s/call ≈ ~110 RPM — bem abaixo do limite Tier 1 (500 RPM).
+# Impede rajadas quando vários professores corrigem ao mesmo tempo.
+_openai_semaphore = asyncio.Semaphore(15)
+
 
 async def _openai_call(coro_factory, *, max_attempts: int = 4):
     """Exponential backoff with full jitter for OpenAI API calls.
@@ -53,25 +57,26 @@ async def _openai_call(coro_factory, *, max_attempts: int = 4):
     call — the coroutine is consumed on the first attempt and must be recreated
     for each retry.
     """
-    for attempt in range(max_attempts):
-        try:
-            resp = await coro_factory()
-            acc = _token_accumulator.get()
-            if acc is not None and getattr(resp, "usage", None):
-                acc.append(resp.usage.total_tokens or 0)
-            return resp
-        except _OPENAI_RETRYABLE as exc:
-            if attempt == max_attempts - 1:
-                raise
-            # Full jitter: sleep between 0 and cap seconds where cap doubles each attempt
-            cap = 2 ** attempt  # 1s, 2s, 4s
-            delay = random.uniform(0, cap)
-            logger.warning(
-                "OpenAI %s (attempt %d/%d) — retry em %.2fs",
-                type(exc).__name__, attempt + 1, max_attempts, delay,
-                extra={"attempt": attempt + 1, "delay": delay},
-            )
-            await asyncio.sleep(delay)
+    async with _openai_semaphore:
+        for attempt in range(max_attempts):
+            try:
+                resp = await coro_factory()
+                acc = _token_accumulator.get()
+                if acc is not None and getattr(resp, "usage", None):
+                    acc.append(resp.usage.total_tokens or 0)
+                return resp
+            except _OPENAI_RETRYABLE as exc:
+                if attempt == max_attempts - 1:
+                    raise
+                # Full jitter: sleep between 0 and cap seconds where cap doubles each attempt
+                cap = 2 ** attempt  # 1s, 2s, 4s
+                delay = random.uniform(0, cap)
+                logger.warning(
+                    "OpenAI %s (attempt %d/%d) — retry em %.2fs",
+                    type(exc).__name__, attempt + 1, max_attempts, delay,
+                    extra={"attempt": attempt + 1, "delay": delay},
+                )
+                await asyncio.sleep(delay)
 
 
 async def _registrar_tokens(professor_id: str, tokens: int) -> None:
