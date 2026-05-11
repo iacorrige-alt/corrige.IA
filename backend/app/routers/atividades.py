@@ -2,6 +2,8 @@ import asyncio
 import csv
 import io
 import logging
+import re
+import unicodedata
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, Request
@@ -224,7 +226,9 @@ async def exportar_resultados_csv(
 
     # utf-8-sig = UTF-8 com BOM — garante abertura correta no Excel
     csv_bytes = output.getvalue().encode("utf-8-sig")
-    nome_arquivo = ativ.data["nome"].replace(" ", "_")[:50]
+    # Filename do header HTTP deve ser ASCII puro (latin-1 não suporta —, ê, etc.)
+    nome_ascii = unicodedata.normalize("NFKD", ativ.data["nome"]).encode("ascii", "ignore").decode("ascii")
+    nome_arquivo = re.sub(r"[^a-zA-Z0-9_\-]", "_", nome_ascii)[:50].strip("_")
     return Response(
         content=csv_bytes,
         media_type="text/csv; charset=utf-8",
