@@ -13,7 +13,7 @@ from fastapi.responses import StreamingResponse
 from app.models.schemas import (
     AtividadeCreate, AtividadeOut, AtividadeUpdate,
     QuestaoCreate, QuestaoOut, QuestaoUpdate,
-    ResultadoOut, UploadOut,
+    ResultadoOut, UploadOut, RespostaUpdate,
 )
 from app.db.supabase_client import get_supabase
 from app.dependencies import get_current_user
@@ -253,6 +253,8 @@ async def reprocessar_atividade(
         raise HTTPException(status_code=404, detail="Atividade não encontrada.")
     if ativ.data["status"] == "corrigindo":
         raise HTTPException(status_code=409, detail="Correção já em andamento.")
+    if ativ.data["status"] != "erro":
+        raise HTTPException(status_code=409, detail="Reprocessamento só é permitido quando a correção está com erro.")
 
     uploads = await asyncio.to_thread(
         supabase.table("uploads").select("id").eq("atividade_id", atividade_id).execute
@@ -388,6 +390,8 @@ async def resultados_atividade(
     atividade_id: str,
     current_user: dict = Depends(get_current_user),
 ):
+    from app.services.storage_service import create_signed_url
+
     supabase = get_supabase()
     ativ = await asyncio.to_thread(
         supabase.table("atividades").select("id")
@@ -398,12 +402,35 @@ async def resultados_atividade(
     if not ativ.data:
         raise HTTPException(status_code=404, detail="Atividade não encontrada.")
 
-    resultados = await asyncio.to_thread(
-        supabase.table("resultados")
-        .select("*, alunos(nome, initials), respostas(*)")
-        .eq("atividade_id", atividade_id)
-        .execute
+    resultados, uploads_resp = await asyncio.gather(
+        asyncio.to_thread(
+            supabase.table("resultados")
+            .select("*, alunos(nome, initials), respostas(*)")
+            .eq("atividade_id", atividade_id)
+            .execute
+        ),
+        asyncio.to_thread(
+            supabase.table("uploads")
+            .select("id, aluno_id, storage_path, tipo_arquivo")
+            .eq("atividade_id", atividade_id)
+            .execute
+        ),
     )
+
+    # Generate signed URLs for all uploads in parallel
+    raw_uploads = uploads_resp.data or []
+    async def _sign(u):
+        try:
+            url = await create_signed_url(u["storage_path"])
+        except Exception:
+            url = None
+        return {**u, "signed_url": url}
+
+    signed = await asyncio.gather(*[_sign(u) for u in raw_uploads])
+
+    uploads_by_aluno: dict[str, list] = {}
+    for u in signed:
+        uploads_by_aluno.setdefault(u["aluno_id"], []).append(u)
 
     out = []
     for r in resultados.data:
@@ -416,5 +443,103 @@ async def resultados_atividade(
             "aluno_initials": aluno.get("initials"),
             "respostas": respostas,
             "flags": flags,
+            "provas": uploads_by_aluno.get(r["aluno_id"], []),
         })
     return out
+
+
+@router.patch("/{atividade_id}/respostas/{resposta_id}")
+async def editar_resposta(
+    atividade_id: str,
+    resposta_id: str,
+    body: RespostaUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    supabase = get_supabase()
+
+    ativ = await asyncio.to_thread(
+        supabase.table("atividades").select("id")
+        .eq("id", atividade_id).eq("professor_id", current_user["id"]).single().execute
+    )
+    if not ativ.data:
+        raise HTTPException(status_code=404, detail="Atividade não encontrada.")
+
+    resposta_resp = await asyncio.to_thread(
+        supabase.table("respostas")
+        .select("id, resultado_id, questao_id, questoes(peso)")
+        .eq("id", resposta_id).single().execute
+    )
+    if not resposta_resp.data:
+        raise HTTPException(status_code=404, detail="Resposta não encontrada.")
+
+    resposta = resposta_resp.data
+    peso = float((resposta.get("questoes") or {}).get("peso") or 1)
+    nova_nota = round(max(0.0, min(body.nota, peso)), 2)
+
+    if nova_nota >= peso:
+        novo_status = "correto"
+    elif nova_nota <= 0:
+        novo_status = "errado"
+    else:
+        novo_status = "parcial"
+
+    resultado_id = resposta["resultado_id"]
+
+    await asyncio.to_thread(
+        supabase.table("respostas")
+        .update({"nota": nova_nota, "status": novo_status})
+        .eq("id", resposta_id).execute
+    )
+
+    todas_resp = await asyncio.to_thread(
+        supabase.table("respostas")
+        .select("nota, questoes(peso)")
+        .eq("resultado_id", resultado_id).execute
+    )
+    nota_total = sum(
+        max(0.0, min(float(r.get("nota") or 0), float((r.get("questoes") or {}).get("peso") or 1)))
+        for r in (todas_resp.data or [])
+    )
+    await asyncio.to_thread(
+        supabase.table("resultados")
+        .update({"nota_total": round(nota_total, 2)})
+        .eq("id", resultado_id).execute
+    )
+
+    return {"nota": nova_nota, "status": novo_status, "nota_total": round(nota_total, 2)}
+
+
+@router.delete("/{atividade_id}/uploads/{upload_id}", status_code=204)
+async def deletar_upload(
+    atividade_id: str,
+    upload_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    supabase = get_supabase()
+
+    ativ = await asyncio.to_thread(
+        supabase.table("atividades").select("id, status")
+        .eq("id", atividade_id).eq("professor_id", current_user["id"]).single().execute
+    )
+    if not ativ.data:
+        raise HTTPException(status_code=404, detail="Atividade não encontrada.")
+    if ativ.data["status"] == "corrigindo":
+        raise HTTPException(status_code=409, detail="Não é possível remover arquivos durante a correção.")
+
+    upload_resp = await asyncio.to_thread(
+        supabase.table("uploads").select("id, storage_path")
+        .eq("id", upload_id).eq("atividade_id", atividade_id).single().execute
+    )
+    if not upload_resp.data:
+        raise HTTPException(status_code=404, detail="Upload não encontrado.")
+
+    storage_path = upload_resp.data["storage_path"]
+
+    await asyncio.to_thread(
+        supabase.table("uploads").delete().eq("id", upload_id).execute
+    )
+
+    try:
+        await asyncio.to_thread(supabase.storage.from_("provas").remove, [storage_path])
+    except Exception as exc:
+        logger.warning("Nao foi possivel remover upload %s do storage: %s", upload_id, exc)

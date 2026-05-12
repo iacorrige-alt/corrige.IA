@@ -168,6 +168,10 @@ export const api = {
     deleteQuestao: (atividadeId, questaoId) =>
       request(`/atividades/${atividadeId}/questoes/${questaoId}`, { method: 'DELETE' }),
     listarUploads: (id) => request(`/atividades/${id}/uploads`),
+    deleteUpload: (atividadeId, uploadId) =>
+      request(`/atividades/${atividadeId}/uploads/${uploadId}`, { method: 'DELETE' }),
+    updateResposta: (atividadeId, respostaId, data) =>
+      request(`/atividades/${atividadeId}/respostas/${respostaId}`, { method: 'PATCH', body: JSON.stringify(data) }),
     extrairQuestoesPdf: (file) => {
       const token = getToken()
       const form = new FormData()

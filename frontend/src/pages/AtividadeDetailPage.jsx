@@ -4,17 +4,99 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Upload, AlertTriangle, CheckCircle, XCircle, MinusCircle,
   Brain, FileText, Trash2, Sparkles, Download, RefreshCw,
-  Plus, Pencil, Check, X, ListChecks, Eye,
+  Plus, Pencil, Check, X, ListChecks, Eye, ExternalLink,
 } from 'lucide-react'
 import { api } from '../lib/api'
 import Spinner from '../components/Spinner'
 import Badge from '../components/Badge'
 import Modal from '../components/Modal'
 
-function ResultadoCard({ resultado }) {
+function RespostaRow({ r, atividadeId, onSaved }) {
+  const qc = useQueryClient()
+  const [editing, setEditing] = useState(false)
+  const [notaInput, setNotaInput] = useState('')
+
+  const updateMutation = useMutation({
+    mutationFn: (nota) => api.atividades.updateResposta(atividadeId, r.id, { nota }),
+    onSuccess: () => {
+      setEditing(false)
+      qc.invalidateQueries({ queryKey: ['resultados', atividadeId] })
+      onSaved?.()
+    },
+  })
+
+  const icons = {
+    correto: <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />,
+    parcial: <MinusCircle className="h-4 w-4 text-yellow-500 flex-shrink-0" />,
+    errado: <XCircle className="h-4 w-4 text-red-500 flex-shrink-0" />,
+  }
+
+  function startEdit() {
+    setNotaInput(String(r.nota ?? 0))
+    setEditing(true)
+  }
+
+  function confirmEdit() {
+    const v = parseFloat(notaInput)
+    if (isNaN(v) || v < 0) return
+    updateMutation.mutate(v)
+  }
+
+  return (
+    <div className="p-4 sm:pl-16">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          {r.texto_resposta && (
+            <p className="text-sm text-gray-700 mb-2 italic break-words">"{r.texto_resposta}"</p>
+          )}
+          {r.comentario_ia && (
+            <div className="flex items-start gap-2">
+              <Brain className="h-4 w-4 text-indigo-400 mt-0.5 flex-shrink-0" />
+              <p className="text-sm text-gray-500 break-words">{r.comentario_ia}</p>
+            </div>
+          )}
+          {r.flag_tipo && <div className="mt-1"><Badge type={r.flag_tipo} /></div>}
+        </div>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {icons[r.status]}
+          {editing ? (
+            <>
+              <input
+                type="number" min="0" step="0.1"
+                value={notaInput}
+                onChange={(e) => setNotaInput(e.target.value)}
+                className="w-16 text-sm border border-indigo-300 rounded-lg px-2 py-0.5 outline-none focus:ring-2 focus:ring-indigo-500"
+                autoFocus
+                onKeyDown={(e) => { if (e.key === 'Enter') confirmEdit(); if (e.key === 'Escape') setEditing(false) }}
+              />
+              <button onClick={confirmEdit} disabled={updateMutation.isPending}
+                className="p-1 text-green-600 hover:bg-green-50 rounded-lg">
+                {updateMutation.isPending ? <Spinner size="sm" /> : <Check className="h-3.5 w-3.5" />}
+              </button>
+              <button onClick={() => setEditing(false)} className="p-1 text-gray-400 hover:bg-gray-100 rounded-lg">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="text-sm font-semibold text-gray-700">{r.nota ?? '—'}</span>
+              <button onClick={startEdit} title="Editar nota"
+                className="p-1 text-gray-300 hover:text-indigo-500 hover:bg-indigo-50 rounded-lg">
+                <Pencil className="h-3 w-3" />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ResultadoCard({ resultado, atividadeId }) {
   const [open, setOpen] = useState(false)
   const hasFlags = resultado.flags?.length > 0
   const nota = resultado.nota_total ?? '—'
+  const provas = resultado.provas || []
 
   return (
     <div className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${hasFlags ? 'border-orange-200' : 'border-gray-100'}`}>
@@ -41,37 +123,28 @@ function ResultadoCard({ resultado }) {
         </div>
       </div>
 
-      {open && resultado.respostas?.length > 0 && (
-        <div className="border-t border-gray-100 divide-y divide-gray-50">
-          {resultado.respostas.map((r) => {
-            const icons = {
-              correto: <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />,
-              parcial: <MinusCircle className="h-4 w-4 text-yellow-500 flex-shrink-0" />,
-              errado: <XCircle className="h-4 w-4 text-red-500 flex-shrink-0" />,
-            }
-            return (
-              <div key={r.id} className="p-4 sm:pl-16">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    {r.texto_resposta && (
-                      <p className="text-sm text-gray-700 mb-2 italic break-words">"{r.texto_resposta}"</p>
-                    )}
-                    {r.comentario_ia && (
-                      <div className="flex items-start gap-2">
-                        <Brain className="h-4 w-4 text-indigo-400 mt-0.5 flex-shrink-0" />
-                        <p className="text-sm text-gray-500 break-words">{r.comentario_ia}</p>
-                      </div>
-                    )}
-                    {r.flag_tipo && <div className="mt-1"><Badge type={r.flag_tipo} /></div>}
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {icons[r.status]}
-                    <span className="text-sm font-semibold text-gray-700">{r.nota ?? '—'}</span>
-                  </div>
-                </div>
-              </div>
-            )
-          })}
+      {open && (
+        <div className="border-t border-gray-100">
+          {provas.length > 0 && (
+            <div className="px-4 py-3 bg-gray-50 flex flex-wrap gap-2">
+              {provas.map((p, i) => (
+                p.signed_url ? (
+                  <a key={p.id} href={p.signed_url} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-800 border border-indigo-200 bg-white px-2.5 py-1.5 rounded-lg hover:bg-indigo-50 transition-colors">
+                    <ExternalLink className="h-3 w-3" />
+                    Ver prova {provas.length > 1 ? i + 1 : ''}
+                  </a>
+                ) : null
+              ))}
+            </div>
+          )}
+          {resultado.respostas?.length > 0 && (
+            <div className="divide-y divide-gray-50">
+              {resultado.respostas.map((r) => (
+                <RespostaRow key={r.id} r={r} atividadeId={atividadeId} />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -98,6 +171,7 @@ export default function AtividadeDetailPage() {
 
   // Uploads list
   const [showUploads, setShowUploads] = useState(false)
+  const [deletingUploadId, setDeletingUploadId] = useState(null)
 
   const { data: atividade } = useQuery({
     queryKey: ['atividade', id],
@@ -513,7 +587,7 @@ export default function AtividadeDetailPage() {
             {uploading ? 'Enviando...' : 'Selecionar Arquivos'}
           </button>
 
-          {(status?.status === 'concluida' || status?.status === 'erro') && (
+          {status?.status === 'erro' && (
             <button
               onClick={() => { if (confirm('Reprocessar a correção? Os resultados atuais serão apagados.')) reprocessMutation.mutate() }}
               disabled={reprocessMutation.isPending}
@@ -556,6 +630,23 @@ export default function AtividadeDetailPage() {
                         Abrir
                       </a>
                     )}
+                    <button
+                      disabled={deletingUploadId === u.id}
+                      onClick={async () => {
+                        if (!confirm('Remover este arquivo? Esta ação não pode ser desfeita.')) return
+                        setDeletingUploadId(u.id)
+                        try {
+                          await api.atividades.deleteUpload(id, u.id)
+                          qc.invalidateQueries({ queryKey: ['uploads', id] })
+                        } finally {
+                          setDeletingUploadId(null)
+                        }
+                      }}
+                      className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40 flex-shrink-0"
+                      title="Remover arquivo"
+                    >
+                      {deletingUploadId === u.id ? <Spinner size="sm" /> : <Trash2 className="h-3.5 w-3.5" />}
+                    </button>
                   </div>
                 ))}
               </div>
@@ -590,7 +681,7 @@ export default function AtividadeDetailPage() {
         ) : (
           <div className="space-y-3 sm:space-y-4">
             {resultados.map((r) => (
-              <ResultadoCard key={r.id} resultado={r} />
+              <ResultadoCard key={r.id} resultado={r} atividadeId={id} />
             ))}
           </div>
         )}

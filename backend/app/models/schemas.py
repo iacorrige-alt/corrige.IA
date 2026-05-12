@@ -215,6 +215,13 @@ class RespostaOut(BaseModel):
     flag_tipo: Optional[str]
 
 
+class ProvaOut(BaseModel):
+    id: str
+    storage_path: str
+    tipo_arquivo: str
+    signed_url: Optional[str] = None
+
+
 class ResultadoOut(BaseModel):
     id: str
     atividade_id: str
@@ -225,6 +232,11 @@ class ResultadoOut(BaseModel):
     criado_em: datetime
     respostas: Optional[list[RespostaOut]] = None
     flags: Optional[list[str]] = None
+    provas: Optional[list[ProvaOut]] = None
+
+
+class RespostaUpdate(BaseModel):
+    nota: float = Field(ge=0)
 
 
 # ─── Upload ──────────────────────────────────────────────────────────────────
