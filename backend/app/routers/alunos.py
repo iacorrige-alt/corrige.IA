@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from app.models.schemas import AlunoCreate, AlunoImportResult, AlunoOut, AlunoUpdate, DashboardAluno
 from app.db.supabase_client import get_supabase
 from app.dependencies import get_current_user
+from app.utils import ler_arquivo
 
 router = APIRouter(tags=["alunos"])
 
@@ -81,7 +82,7 @@ async def importar_alunos_csv(
     if not turma.data:
         raise HTTPException(status_code=404, detail="Turma não encontrada.")
 
-    content = await file.read()
+    content = await ler_arquivo(file, 1 * 1024 * 1024)  # 1 MB é mais que suficiente para nomes
     text = content.decode("utf-8-sig", errors="replace")
     reader = csv.reader(io.StringIO(text))
 

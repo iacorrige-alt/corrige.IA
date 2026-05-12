@@ -45,6 +45,11 @@ _OPENAI_RETRYABLE = (openai.RateLimitError, openai.APIStatusError, openai.APICon
 # Definido em corrigir_atividade / extrair_questoes_pdf e lido por _openai_call.
 _token_accumulator: ContextVar[list[int] | None] = ContextVar("token_accumulator", default=None)
 
+
+def _esc(text: str) -> str:
+    """Escape closing XML tags so prompt delimiters can't be broken by content."""
+    return text.replace("</", "<\\/")
+
 # 15 slots × ~8s/call ≈ ~110 RPM — bem abaixo do limite Tier 1 (500 RPM).
 # Impede rajadas quando vários professores corrigem ao mesmo tempo.
 _openai_semaphore = asyncio.Semaphore(15)
@@ -102,8 +107,16 @@ async def _registrar_tokens(professor_id: str, tokens: int) -> None:
 
 # ─── Public entrypoint ────────────────────────────────────────────────────────
 
-async def corrigir_atividade(atividade_id: str, professor_id: str) -> None:
-    """Background task: grade all uploaded files for an activity."""
+async def corrigir_atividade(
+    atividade_id: str,
+    professor_id: str,
+    upload_ids: list[str] | None = None,
+) -> None:
+    """Background task: grade uploaded files for an activity.
+
+    upload_ids: if provided, only these uploads are processed (used when adding
+    files to an already-corrected activity to avoid reprocessing old uploads).
+    """
     supabase = get_supabase()
     acc: list[int] = []
     ctx_token = _token_accumulator.set(acc)
@@ -115,9 +128,10 @@ async def corrigir_atividade(atividade_id: str, professor_id: str) -> None:
         ativ = ativ_resp.data
         questoes = sorted(ativ.get("questoes", []), key=lambda q: q["ordem"])
 
-        uploads_resp = await asyncio.to_thread(
-            supabase.table("uploads").select("*").eq("atividade_id", atividade_id).execute
-        )
+        query = supabase.table("uploads").select("*").eq("atividade_id", atividade_id)
+        if upload_ids:
+            query = query.in_("id", upload_ids)
+        uploads_resp = await asyncio.to_thread(query.execute)
         uploads = uploads_resp.data
 
         alunos_resp = await asyncio.to_thread(
@@ -225,16 +239,19 @@ async def _processar_upload(
         texto = await _extrair_texto_imagem(content, content_type=ct)
 
     if not texto.strip():
-        logger.warning("Texto extraido vazio para upload %s — arquivo ilegivel ou corrompido", upload["id"])
-        return
+        raise RuntimeError(
+            f"Texto extraído vazio para upload {upload['id']} — arquivo ilegível ou corrompido"
+        )
 
     aluno_id = upload.get("aluno_id")
     if not aluno_id:
         aluno_id = await _identificar_aluno(texto, alunos)
 
     if not aluno_id:
-        logger.warning("Nao foi possivel identificar aluno para upload %s", upload["id"])
-        return
+        raise RuntimeError(
+            f"Aluno não identificado para upload {upload['id']} — "
+            "associe manualmente em 'Ver arquivos enviados'"
+        )
 
     await asyncio.to_thread(
         supabase.table("uploads").update({"aluno_id": aluno_id}).eq("id", upload["id"]).execute
@@ -297,8 +314,7 @@ def _pdf_primeira_pagina_png(content: bytes) -> tuple[bytes, str]:
 
     except Exception as exc:
         logger.warning("Nao foi possivel converter PDF para imagem: %s", exc)
-
-    return content, "application/pdf"  # Vision will reject with a clear error
+        raise RuntimeError(f"Falha ao converter PDF para imagem: {exc}") from exc
 
 
 async def _extrair_texto_imagem(content: bytes, content_type: str = "image/jpeg") -> str:
@@ -437,11 +453,11 @@ async def _corrigir_com_gabarito(
 
     if gabarito_pdf_texto:
         gabarito_bloco = (
-            f"<gabarito_professor>\n{gabarito_pdf_texto}\n</gabarito_professor>\n"
+            f"<gabarito_professor>\n{_esc(gabarito_pdf_texto)}\n</gabarito_professor>\n"
         )
     elif ativ.get("gabarito_texto"):
         gabarito_bloco = (
-            f"<gabarito_professor>\n{ativ['gabarito_texto']}\n</gabarito_professor>\n"
+            f"<gabarito_professor>\n{_esc(ativ['gabarito_texto'])}\n</gabarito_professor>\n"
         )
     else:
         gabarito_bloco = ""
@@ -459,7 +475,7 @@ Questoes:
 
 Respostas do aluno:
 <resposta_aluno>
-{texto_respostas}
+{_esc(texto_respostas)}
 </resposta_aluno>
 
 Retorne um JSON no formato exato abaixo (objeto com chave "respostas"):
@@ -582,7 +598,7 @@ Questoes com criterios de avaliacao:
 
 Respostas do aluno:
 <resposta_aluno>
-{texto_respostas}
+{_esc(texto_respostas)}
 </resposta_aluno>
 
 Avalie cada resposta comparando-a aos criterios fornecidos.
@@ -688,11 +704,12 @@ def _salvar_resultado(
     ]
 
     if respostas_rows:
-        existing = supabase.table("respostas").select("id").eq("resultado_id", resultado_id).execute()
-        old_ids = [r["id"] for r in (existing.data or [])]
-        supabase.table("respostas").insert(respostas_rows).execute()
-        if old_ids:
-            supabase.table("respostas").delete().in_("id", old_ids).execute()
+        # Upsert é atômico por questão: elimina a race condition quando dois uploads
+        # do mesmo aluno são processados concorrentemente.
+        supabase.table("respostas").upsert(
+            respostas_rows,
+            on_conflict="resultado_id,questao_id",
+        ).execute()
 
 
 async def corrigir_upload(upload_id: str, atividade_id: str, professor_id: str) -> None:
@@ -827,6 +844,7 @@ async def analisar_turma(
     disciplina: str,
     metricas: dict,
     professor_id: str | None = None,
+    turma_id: str | None = None,
 ) -> dict:
     """Generate pedagogical and methodological analysis for a class using GPT-4o.
 
@@ -836,7 +854,7 @@ async def analisar_turma(
     """
     cache_key = hashlib.md5(
         json.dumps(
-            {"turma_nome": turma_nome, "disciplina": disciplina, **metricas},
+            {"turma_id": turma_id, "turma_nome": turma_nome, "disciplina": disciplina, **metricas},
             sort_keys=True,
         ).encode()
     ).hexdigest()

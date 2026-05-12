@@ -464,13 +464,16 @@ async def editar_resposta(
     if not ativ.data:
         raise HTTPException(status_code=404, detail="Atividade não encontrada.")
 
+    # Fix: join via resultados para garantir que a resposta pertence a esta atividade (IDOR)
     resposta_resp = await asyncio.to_thread(
         supabase.table("respostas")
-        .select("id, resultado_id, questao_id, questoes(peso)")
+        .select("id, resultado_id, questao_id, questoes(peso), resultados(atividade_id)")
         .eq("id", resposta_id).single().execute
     )
     if not resposta_resp.data:
         raise HTTPException(status_code=404, detail="Resposta não encontrada.")
+    if (resposta_resp.data.get("resultados") or {}).get("atividade_id") != atividade_id:
+        raise HTTPException(status_code=403, detail="Acesso negado.")
 
     resposta = resposta_resp.data
     peso = float((resposta.get("questoes") or {}).get("peso") or 1)
@@ -491,22 +494,13 @@ async def editar_resposta(
         .eq("id", resposta_id).execute
     )
 
-    todas_resp = await asyncio.to_thread(
-        supabase.table("respostas")
-        .select("nota, questoes(peso)")
-        .eq("resultado_id", resultado_id).execute
+    # Trigger _recalcular_nota_total já atualizou nota_total; basta ler de volta.
+    resultado_resp = await asyncio.to_thread(
+        supabase.table("resultados").select("nota_total").eq("id", resultado_id).single().execute
     )
-    nota_total = sum(
-        max(0.0, min(float(r.get("nota") or 0), float((r.get("questoes") or {}).get("peso") or 1)))
-        for r in (todas_resp.data or [])
-    )
-    await asyncio.to_thread(
-        supabase.table("resultados")
-        .update({"nota_total": round(nota_total, 2)})
-        .eq("id", resultado_id).execute
-    )
+    nota_total = round((resultado_resp.data or {}).get("nota_total") or 0, 2)
 
-    return {"nota": nova_nota, "status": novo_status, "nota_total": round(nota_total, 2)}
+    return {"nota": nova_nota, "status": novo_status, "nota_total": nota_total}
 
 
 @router.patch("/{atividade_id}/uploads/{upload_id}")
@@ -543,6 +537,15 @@ async def atualizar_upload_aluno(
 
     # Move o resultado do aluno anterior para o novo (caso de erro de identificação pela IA)
     if old_aluno_id and old_aluno_id != new_aluno_id and new_aluno_id:
+        conflito = await asyncio.to_thread(
+            supabase.table("resultados").select("id")
+            .eq("atividade_id", atividade_id).eq("aluno_id", new_aluno_id).execute
+        )
+        if conflito.data:
+            raise HTTPException(
+                status_code=409,
+                detail="O aluno selecionado já possui resultado para esta atividade.",
+            )
         await asyncio.to_thread(
             supabase.table("resultados")
             .update({"aluno_id": new_aluno_id})

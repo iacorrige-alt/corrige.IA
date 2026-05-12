@@ -1,12 +1,13 @@
 """
 Rate limiter global da aplicação.
 
-Railway (e qualquer proxy reverso) encaminha o IP real do cliente no header
-X-Forwarded-For. O helper padrão do slowapi usa request.client.host, que
-retorna o IP do proxy — o que bloquearia TODOS os usuários simultaneamente
-ao primeiro limite atingido.
+Railway usa um único proxy reverso que ANEXA o IP real do cliente como o
+último (mais à direita) hop em X-Forwarded-For. Usar o primeiro hop é
+inseguro: o cliente pode enviar "X-Forwarded-For: fake_ip" e o Railway
+não sobrescreve — apenas acrescenta o IP real no final.
 
-get_real_ip extrai o primeiro hop de X-Forwarded-For (o IP do cliente real).
+get_real_ip extrai o último hop de X-Forwarded-For (adicionado pelo proxy
+Railway, não controlado pelo cliente).
 """
 from slowapi import Limiter
 from starlette.requests import Request
@@ -15,8 +16,10 @@ from starlette.requests import Request
 def get_real_ip(request: Request) -> str:
     forwarded_for = request.headers.get("x-forwarded-for")
     if forwarded_for:
-        # "client, proxy1, proxy2" — o primeiro é sempre o cliente real
-        return forwarded_for.split(",")[0].strip()
+        # O Railway adiciona o IP real como último hop; os anteriores podem ser
+        # forjados pelo cliente — nunca confiar no primeiro.
+        hops = [h.strip() for h in forwarded_for.split(",")]
+        return hops[-1]
     # Fallback para desenvolvimento local (sem proxy)
     return request.client.host if request.client else "127.0.0.1"
 

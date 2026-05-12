@@ -113,7 +113,7 @@ async def upload_provas(
             status_code=409,
             detail="Correção já em andamento. Aguarde a conclusão antes de enviar novos arquivos.",
         )
-    background_tasks.add_task(corrigir_atividade, atividade_id, current_user["id"])
+    background_tasks.add_task(corrigir_atividade, atividade_id, current_user["id"], upload_ids)
 
     return UploadResponse(
         message=f"{len(files)} arquivo(s) enviado(s). Correção iniciada.",

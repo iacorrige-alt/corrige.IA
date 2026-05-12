@@ -2,12 +2,13 @@ import asyncio
 import logging
 
 import httpx
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, Request, status, Depends
 from supabase_auth.errors import AuthApiError
 
 from app.config import settings
 from app.db.supabase_client import get_supabase
 from app.dependencies import get_current_user
+from app.limiter import limiter
 from app.models.schemas import (
     AuthResponse, ChangePasswordRequest, LoginRequest,
     ProfessorOut, ProfessorUpdate, RefreshRequest, RegisterRequest,
@@ -71,6 +72,7 @@ async def register(body: RegisterRequest):
 
     # Aguarda o trigger handle_new_user() inserir a linha em professores.
     nome = body.nome
+    prof_data = None
     for delay in (0.1, 0.2, 0.4, 0.8):
         await asyncio.sleep(delay)
         prof = await asyncio.to_thread(
@@ -78,7 +80,25 @@ async def register(body: RegisterRequest):
         )
         if prof.data:
             nome = prof.data["nome"]
+            prof_data = prof.data
             break
+
+    if not prof_data:
+        # Trigger falhou — inserir manualmente para não deixar conta em estado quebrado.
+        logger.error(
+            "Trigger handle_new_user nao executou para user %s — inserindo professores manualmente",
+            resp.user.id, extra={"user_id": str(resp.user.id)},
+        )
+        try:
+            await asyncio.to_thread(
+                supabase.table("professores").insert({
+                    "id": str(resp.user.id),
+                    "nome": body.nome,
+                    "email": body.email,
+                }).execute
+            )
+        except Exception as insert_exc:
+            logger.error("Fallback insert em professores falhou: %s", insert_exc)
 
     logger.info(
         "Nova conta criada: %s (id=%s)",
@@ -187,7 +207,9 @@ async def atualizar_perfil(
 
 
 @router.post("/change-password")
+@limiter.limit("5/minute")
 async def change_password(
+    request: Request,
     body: ChangePasswordRequest,
     current_user: dict = Depends(get_current_user),
 ):
