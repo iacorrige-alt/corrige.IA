@@ -1,9 +1,12 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { Menu, Brain } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import Sidebar from './components/Sidebar'
 import Spinner from './components/Spinner'
+import UpgradeModal from './components/UpgradeModal'
+import { api } from './lib/api'
 
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
@@ -18,7 +21,27 @@ import ProfilePage from './pages/ProfilePage'
 function ProtectedLayout() {
   const { user, loading } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [showUpgrade, setShowUpgrade] = useState(false)
   const closeSidebar = useCallback(() => setSidebarOpen(false), [])
+
+  const { data: professor } = useQuery({
+    queryKey: ['me'],
+    queryFn: api.auth.me,
+    enabled: !!user,
+    staleTime: 60_000,
+  })
+
+  // Exibe o modal sempre que qualquer request retornar 402
+  useEffect(() => {
+    const handler = () => setShowUpgrade(true)
+    window.addEventListener('quota-exceeded', handler)
+    return () => window.removeEventListener('quota-exceeded', handler)
+  }, [])
+
+  // Exibe automaticamente se conta já está bloqueada ao carregar
+  useEffect(() => {
+    if (professor?.plano === 'bloqueado') setShowUpgrade(true)
+  }, [professor?.plano])
 
   if (loading) {
     return (
@@ -58,6 +81,13 @@ function ProtectedLayout() {
           <Outlet />
         </main>
       </div>
+
+      {showUpgrade && (
+        <UpgradeModal
+          professor={professor}
+          onClose={() => setShowUpgrade(false)}
+        />
+      )}
     </div>
   )
 }

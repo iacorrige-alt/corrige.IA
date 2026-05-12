@@ -15,6 +15,9 @@ async function request(path, options = {}) {
   const res = await fetch(`${API_URL}${path}`, { ...options, headers })
 
   if (!res.ok) {
+    if (res.status === 402) {
+      window.dispatchEvent(new CustomEvent('quota-exceeded'))
+    }
     if (res.status === 401 && !path.startsWith('/auth/')) {
       localStorage.removeItem('corrigeai_token')
       localStorage.removeItem('corrigeai_refresh_token')
@@ -134,6 +137,7 @@ export const api = {
             const e = await r.json().catch(() => ({ detail: r.statusText }))
             const err = new Error(e.detail || `Erro ${r.status}: ${r.statusText}`)
             err.status = r.status
+            if (r.status === 402) window.dispatchEvent(new CustomEvent('quota-exceeded'))
             throw err
           }
           return r.json()
@@ -202,5 +206,11 @@ export const api = {
         return r.json()
       })
     },
+  },
+
+  // ─── Pagamento ─────────────────────────────────────────────────────────────
+  pagamento: {
+    criarCheckout: () => request('/pagamento/checkout', { method: 'POST' }),
+    abrirPortal: () => request('/pagamento/portal'),
   },
 }

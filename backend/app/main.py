@@ -13,7 +13,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from app.config import settings
 from app.limiter import limiter
-from app.routers import auth, turmas, alunos, atividades, correcao
+from app.routers import auth, turmas, alunos, atividades, correcao, pagamento, webhooks
 
 
 # Snapshot of standard LogRecord instance keys — used to detect extra={} keys reliably.
@@ -117,6 +117,8 @@ app.include_router(turmas.router)
 app.include_router(alunos.router)
 app.include_router(atividades.router)
 app.include_router(correcao.router)
+app.include_router(pagamento.router)
+app.include_router(webhooks.router)
 
 
 @app.get("/health")

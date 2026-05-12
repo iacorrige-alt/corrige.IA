@@ -48,7 +48,7 @@ _OPENAI_RETRYABLE = (openai.RateLimitError, openai.APIStatusError, openai.APICon
 
 # ContextVar para acumular tokens de todas as chamadas OpenAI dentro de uma operação.
 # Definido em corrigir_atividade / extrair_questoes_pdf e lido por _openai_call.
-_token_accumulator: ContextVar[list[int] | None] = ContextVar("token_accumulator", default=None)
+_token_accumulator: ContextVar[list[tuple[int, int]] | None] = ContextVar("token_accumulator", default=None)
 
 
 def _esc(text: str) -> str:
@@ -73,7 +73,10 @@ async def _openai_call(coro_factory, *, max_attempts: int = 4):
                 resp = await coro_factory()
                 acc = _token_accumulator.get()
                 if acc is not None and getattr(resp, "usage", None):
-                    acc.append(resp.usage.total_tokens or 0)
+                    acc.append((
+                        resp.usage.prompt_tokens or 0,
+                        resp.usage.completion_tokens or 0,
+                    ))
                 return resp
             except _OPENAI_RETRYABLE as exc:
                 if attempt == max_attempts - 1:
@@ -89,22 +92,30 @@ async def _openai_call(coro_factory, *, max_attempts: int = 4):
                 await asyncio.sleep(delay)
 
 
-async def _registrar_tokens(professor_id: str, tokens: int) -> None:
-    """Incremento atômico do contador de tokens via RPC. Best-effort — nunca levanta."""
-    if tokens <= 0:
+async def _registrar_tokens(professor_id: str, input_tokens: int, output_tokens: int) -> None:
+    """Incremento atômico dos contadores de tokens via RPC. Best-effort — nunca levanta."""
+    if input_tokens <= 0 and output_tokens <= 0:
         return
     supabase = get_supabase()
     try:
         await asyncio.to_thread(
             supabase.rpc(
                 "incrementar_tokens_professor",
-                {"p_professor_id": professor_id, "p_delta": tokens},
+                {
+                    "p_professor_id": professor_id,
+                    "p_input_tokens": input_tokens,
+                    "p_output_tokens": output_tokens,
+                },
             ).execute
         )
         logger.info(
-            "Tokens registrados: +%d para professor %s",
-            tokens, professor_id,
-            extra={"professor_id": professor_id, "tokens_delta": tokens},
+            "Tokens registrados: +%d entrada, +%d saída para professor %s",
+            input_tokens, output_tokens, professor_id,
+            extra={
+                "professor_id": professor_id,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+            },
         )
     except Exception as exc:
         logger.warning("Nao foi possivel registrar tokens para %s: %s", professor_id, exc)
@@ -123,7 +134,7 @@ async def corrigir_atividade(
     files to an already-corrected activity to avoid reprocessing old uploads).
     """
     supabase = get_supabase()
-    acc: list[int] = []
+    acc: list[tuple[int, int]] = []
     ctx_token = _token_accumulator.set(acc)
     try:
         ativ_resp = await asyncio.to_thread(
@@ -201,7 +212,7 @@ async def corrigir_atividade(
         )
     finally:
         _token_accumulator.reset(ctx_token)
-        await _registrar_tokens(professor_id, sum(acc))
+        await _registrar_tokens(professor_id, sum(t[0] for t in acc), sum(t[1] for t in acc))
 
 
 # ─── Internal helpers ─────────────────────────────────────────────────────────
@@ -727,7 +738,7 @@ def _salvar_resultado(
 async def corrigir_upload(upload_id: str, atividade_id: str, professor_id: str) -> None:
     """Background task: re-run AI correction for a single upload (already associated to a student)."""
     supabase = get_supabase()
-    acc: list[int] = []
+    acc: list[tuple[int, int]] = []
     ctx_token = _token_accumulator.set(acc)
     try:
         ativ_resp = await asyncio.to_thread(
@@ -761,21 +772,21 @@ async def corrigir_upload(upload_id: str, atividade_id: str, professor_id: str) 
         logger.error("Erro ao corrigir upload %s:\n%s", upload_id, traceback.format_exc())
     finally:
         _token_accumulator.reset(ctx_token)
-        await _registrar_tokens(professor_id, sum(acc))
+        await _registrar_tokens(professor_id, sum(t[0] for t in acc), sum(t[1] for t in acc))
 
 
 # ─── Extração de questões de PDF ─────────────────────────────────────────────
 
 async def extrair_questoes_pdf(content: bytes, content_type: str, professor_id: str | None = None) -> list[dict]:
     """Extract structured questions from a PDF or image using GPT-4o."""
-    acc: list[int] = []
+    acc: list[tuple[int, int]] = []
     ctx_token = _token_accumulator.set(acc)
     try:
         return await _extrair_questoes_pdf_impl(content, content_type)
     finally:
         _token_accumulator.reset(ctx_token)
         if professor_id:
-            await _registrar_tokens(professor_id, sum(acc))
+            await _registrar_tokens(professor_id, sum(t[0] for t in acc), sum(t[1] for t in acc))
 
 
 async def _extrair_questoes_pdf_impl(content: bytes, content_type: str) -> list[dict]:
@@ -909,7 +920,7 @@ Sugestoes pedagogicas: estrategias de curriculo, avaliacao formativa, recuperaca
 Sugestoes metodologicas: tecnicas de ensino, dinamicas de aula, abordagens didaticas.
 Seja especifico e baseado nos numeros. Responda em portugues."""
 
-    acc: list[int] = []
+    acc: list[tuple[int, int]] = []
     ctx_token = _token_accumulator.set(acc)
     try:
         resp = await _openai_call(
@@ -938,4 +949,4 @@ Seja especifico e baseado nos numeros. Responda em portugues."""
     finally:
         _token_accumulator.reset(ctx_token)
         if professor_id:
-            await _registrar_tokens(professor_id, sum(acc))
+            await _registrar_tokens(professor_id, sum(t[0] for t in acc), sum(t[1] for t in acc))

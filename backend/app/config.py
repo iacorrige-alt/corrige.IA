@@ -7,6 +7,11 @@ class Settings(BaseSettings):
     openai_api_key: str
     # CORS origins (comma-separated)
     cors_origins: str = "http://localhost:5173"
+    # Stripe
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_price_id: str = ""
+    frontend_url: str = "http://localhost:5173"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

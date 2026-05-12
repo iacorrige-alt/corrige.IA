@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { User, Lock, Zap, CheckCircle, AlertTriangle } from 'lucide-react'
+import { User, Lock, Zap, CheckCircle, AlertTriangle, Crown, ExternalLink } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../hooks/useAuth'
 import Spinner from '../components/Spinner'
@@ -37,10 +37,41 @@ export default function ProfilePage() {
   const [senhaSaving, setSenhaSaving] = useState(false)
 
   const nomeAtual = professor?.nome || user?.nome || ''
-  const tokensUsados = professor?.tokens_usados ?? 0
-  const limiteTokens = professor?.limite_tokens ?? 0
-  const pct = limiteTokens > 0 ? Math.min((tokensUsados / limiteTokens) * 100, 100) : 0
-  const corBarra = pct >= 90 ? 'bg-red-500' : pct >= 70 ? 'bg-yellow-500' : 'bg-indigo-500'
+  const plano = professor?.plano ?? 'free_trial'
+  const inputUsado = professor?.input_tokens_usados ?? 0
+  const outputUsado = professor?.output_tokens_usados ?? 0
+  const inputLimite = professor?.input_tokens_limite ?? 5000000
+  const outputLimite = professor?.output_tokens_limite ?? 5000000
+  const pctInput = inputLimite > 0 ? Math.min((inputUsado / inputLimite) * 100, 100) : 0
+  const pctOutput = outputLimite > 0 ? Math.min((outputUsado / outputLimite) * 100, 100) : 0
+  const corInput = pctInput >= 100 ? 'bg-red-500' : pctInput >= 80 ? 'bg-yellow-500' : 'bg-indigo-500'
+  const corOutput = pctOutput >= 100 ? 'bg-red-500' : pctOutput >= 80 ? 'bg-yellow-500' : 'bg-indigo-500'
+
+  const [assinandoLoading, setAssinandoLoading] = useState(false)
+  const [portalLoading, setPortalLoading] = useState(false)
+
+  async function handleAssinar() {
+    setAssinandoLoading(true)
+    try {
+      const { url } = await api.pagamento.criarCheckout()
+      window.location.href = url
+    } catch (err) {
+      alert(err.message || 'Erro ao iniciar pagamento.')
+      setAssinandoLoading(false)
+    }
+  }
+
+  async function handlePortal() {
+    setPortalLoading(true)
+    try {
+      const { url } = await api.pagamento.abrirPortal()
+      window.open(url, '_blank', 'noopener')
+    } catch (err) {
+      alert(err.message || 'Erro ao abrir portal.')
+    } finally {
+      setPortalLoading(false)
+    }
+  }
 
   async function handleNome(e) {
     e.preventDefault()
@@ -129,26 +160,70 @@ export default function ProfilePage() {
           )}
         </Section>
 
-        {/* Uso de tokens */}
-        <Section icon={Zap} title="Uso de Tokens IA">
+        {/* Plano e uso de tokens */}
+        <Section icon={Zap} title="Plano e Uso de Tokens">
           {isLoading ? (
             <div className="flex justify-center py-4"><Spinner /></div>
           ) : (
-            <div className="space-y-3">
-              <div className="flex items-end justify-between text-sm">
-                <span className="text-gray-600">{tokensUsados.toLocaleString('pt-BR')} tokens usados</span>
-                <span className="text-gray-400 text-xs">de {limiteTokens.toLocaleString('pt-BR')}</span>
+            <div className="space-y-4">
+              {/* Badge do plano */}
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Plano atual</span>
+                {plano === 'pago' ? (
+                  <span className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 bg-amber-100 text-amber-700 rounded-full">
+                    <Crown className="h-3 w-3" /> Pago
+                  </span>
+                ) : plano === 'bloqueado' ? (
+                  <span className="text-xs font-semibold px-2.5 py-1 bg-red-100 text-red-700 rounded-full">Bloqueado</span>
+                ) : (
+                  <span className="text-xs font-semibold px-2.5 py-1 bg-gray-100 text-gray-600 rounded-full">Gratuito</span>
+                )}
               </div>
-              <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all ${corBarra}`}
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-              <p className="text-xs text-gray-400">
-                {pct.toFixed(1)}% do limite utilizado
-                {pct >= 90 && <span className="text-red-500 font-medium"> — limite próximo!</span>}
-              </p>
+
+              {/* Barras de uso (só para free_trial / bloqueado) */}
+              {plano !== 'pago' && (
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex justify-between text-xs text-gray-500 mb-1">
+                      <span>Tokens de entrada</span>
+                      <span>{inputUsado.toLocaleString('pt-BR')} / {inputLimite.toLocaleString('pt-BR')}</span>
+                    </div>
+                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full transition-all ${corInput}`} style={{ width: `${pctInput}%` }} />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-xs text-gray-500 mb-1">
+                      <span>Tokens de saída</span>
+                      <span>{outputUsado.toLocaleString('pt-BR')} / {outputLimite.toLocaleString('pt-BR')}</span>
+                    </div>
+                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full transition-all ${corOutput}`} style={{ width: `${pctOutput}%` }} />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Ações de assinatura */}
+              {plano === 'pago' ? (
+                <button
+                  onClick={handlePortal}
+                  disabled={portalLoading}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 text-sm border border-gray-300 rounded-xl hover:bg-gray-50 disabled:opacity-50"
+                >
+                  {portalLoading ? <Spinner size="sm" /> : <ExternalLink className="h-4 w-4 text-gray-500" />}
+                  Gerenciar assinatura
+                </button>
+              ) : (
+                <button
+                  onClick={handleAssinar}
+                  disabled={assinandoLoading}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 text-sm bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {assinandoLoading ? <Spinner size="sm" /> : <Crown className="h-4 w-4" />}
+                  {assinandoLoading ? 'Redirecionando...' : 'Assinar plano pago'}
+                </button>
+              )}
             </div>
           )}
         </Section>
