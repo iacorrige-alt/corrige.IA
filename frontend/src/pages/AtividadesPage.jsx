@@ -105,7 +105,10 @@ export default function AtividadesPage() {
     setFormError('')
     if (!form.turma_id) { setFormError('Selecione uma turma.'); return }
     if (!form.nome.trim()) { setFormError('Digite o nome da atividade.'); return }
-    createMutation.mutate({ ...form, questoes: questoes.filter(q => q.enunciado.trim()) })
+    const questoesValidas = questoes.filter(q => q.enunciado.trim())
+    const descartadas = questoes.length - questoesValidas.length
+    if (descartadas > 0 && !confirm(`${descartadas} questão(ões) sem enunciado serão descartadas. Continuar?`)) return
+    createMutation.mutate({ ...form, questoes: questoesValidas })
   }
 
   return (

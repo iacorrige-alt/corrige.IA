@@ -153,7 +153,8 @@ export default function TurmaDashboardPage() {
     distribuicao, evolucao, ranking, analise_ia,
   } = data
 
-  const notaColor = media_geral >= 7 ? 'text-green-600' : media_geral >= 5 ? 'text-yellow-600' : 'text-red-600'
+  const notaSegura = media_geral != null && !Number.isNaN(media_geral) ? media_geral : null
+  const notaColor = notaSegura == null ? 'text-gray-400' : notaSegura >= 7 ? 'text-green-600' : notaSegura >= 5 ? 'text-yellow-600' : 'text-red-600'
 
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
@@ -170,7 +171,7 @@ export default function TurmaDashboardPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
         <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-100 shadow-sm col-span-2 lg:col-span-1 flex flex-col items-center justify-center">
-          <p className={`text-4xl font-bold ${notaColor}`}>{media_geral.toFixed(1)}</p>
+          <p className={`text-4xl font-bold ${notaColor}`}>{notaSegura != null ? notaSegura.toFixed(1) : '—'}</p>
           <p className="text-xs text-gray-500 mt-1">Média Geral</p>
         </div>
         <StatCard

@@ -15,6 +15,14 @@ async function request(path, options = {}) {
   const res = await fetch(`${API_URL}${path}`, { ...options, headers })
 
   if (!res.ok) {
+    if (res.status === 401 && !path.startsWith('/auth/')) {
+      localStorage.removeItem('corrigeai_token')
+      localStorage.removeItem('corrigeai_refresh_token')
+      localStorage.removeItem('corrigeai_expires_at')
+      localStorage.removeItem('corrigeai_user')
+      window.location.href = '/login'
+      return
+    }
     const body = await res.json().catch(() => ({ detail: res.statusText }))
     const err = new Error(body.detail || 'Erro na requisição')
     err.status = res.status

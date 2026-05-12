@@ -276,7 +276,7 @@ export default function AtividadeDetailPage() {
       a.download = `resultados_${atividade?.nome || id}.csv`
       a.click()
       URL.revokeObjectURL(url)
-    } catch { /* ignore */ }
+    } catch (err) { alert(err?.message || 'Erro ao exportar CSV') }
   }
 
   function startEditQuestao(q) {
@@ -686,11 +686,10 @@ export default function AtividadeDetailPage() {
                               setCorrendo(u.id)
                               try {
                                 await api.atividades.corrigirUpload(id, u.id)
-                                setTimeout(() => {
-                                  qc.invalidateQueries({ queryKey: ['resultados', id] })
-                                  qc.invalidateQueries({ queryKey: ['uploads', id] })
-                                  setCorrendo(null)
-                                }, 8000)
+                                qc.invalidateQueries({ queryKey: ['status', id] })
+                                qc.invalidateQueries({ queryKey: ['resultados', id] })
+                                qc.invalidateQueries({ queryKey: ['uploads', id] })
+                                setCorrendo(null)
                               } catch (err) {
                                 alert(err.message)
                                 setCorrendo(null)
