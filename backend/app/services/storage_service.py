@@ -32,6 +32,8 @@ async def _storage_retry(fn, *, label: str, max_attempts: int = 3):
     for attempt in range(max_attempts):
         try:
             return await fn()
+        except FileNotFoundError:
+            raise  # 404 não é transitório — não retentar
         except Exception as exc:
             if attempt == max_attempts - 1:
                 raise
@@ -88,7 +90,9 @@ async def create_signed_url(storage_path: str, expires_in: int = 3600) -> str:
         if resp.status_code != 200:
             raise RuntimeError(f"Signed URL falhou: {resp.status_code} {resp.text}")
         data = resp.json()
-        relative = data.get("signedURL") or data.get("signedUrl") or data.get("signed_url", "")
+        relative = data.get("signedURL") or data.get("signedUrl") or data.get("signed_url") or ""
+        if not relative:
+            raise RuntimeError(f"Supabase não retornou URL assinada para {storage_path}: {data}")
         return f"{settings.supabase_url}/storage/v1{relative}" if relative.startswith("/") else relative
 
 
@@ -99,6 +103,8 @@ async def download_file(storage_path: str) -> bytes:
                 _storage_url(storage_path),
                 headers=_headers(),
             )
+            if resp.status_code == 404:
+                raise FileNotFoundError(f"Arquivo não encontrado no storage: {storage_path}")
             if resp.status_code != 200:
                 raise RuntimeError(f"Storage download falhou: {resp.status_code} {resp.text}")
             return resp.content

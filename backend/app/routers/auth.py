@@ -139,7 +139,7 @@ async def login(body: LoginRequest):
     prof = await asyncio.to_thread(
         supabase.table("professores").select("nome").eq("id", resp.user.id).single().execute
     )
-    nome = prof.data["nome"] if prof.data else resp.user.email.split("@")[0]
+    nome = (prof.data or {}).get("nome") or resp.user.email.split("@")[0]
 
     return _build_auth_response(resp.session, resp.user, nome)
 
@@ -167,7 +167,7 @@ async def refresh(body: RefreshRequest):
     prof = await asyncio.to_thread(
         supabase.table("professores").select("nome").eq("id", resp.user.id).single().execute
     )
-    nome = prof.data["nome"] if prof.data else resp.user.email.split("@")[0]
+    nome = (prof.data or {}).get("nome") or resp.user.email.split("@")[0]
 
     return _build_auth_response(resp.session, resp.user, nome)
 
@@ -236,7 +236,7 @@ async def change_password(
             },
         )
     if update_resp.status_code != 200:
-        logger.error("Erro ao alterar senha para %s: %s %s", current_user["id"], update_resp.status_code, update_resp.text)
+        logger.error("Erro ao alterar senha para %s: status %s", current_user["id"], update_resp.status_code)
         raise HTTPException(status_code=500, detail="Erro ao alterar a senha.")
 
     return {"message": "Senha alterada com sucesso."}

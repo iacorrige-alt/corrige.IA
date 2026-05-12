@@ -531,11 +531,7 @@ async def atualizar_upload_aluno(
     old_aluno_id = upload_resp.data.get("aluno_id")
     new_aluno_id = body.aluno_id
 
-    await asyncio.to_thread(
-        supabase.table("uploads").update({"aluno_id": new_aluno_id}).eq("id", upload_id).execute
-    )
-
-    # Move o resultado do aluno anterior para o novo (caso de erro de identificação pela IA)
+    # Verificar conflito ANTES de atualizar o upload para manter estado consistente.
     if old_aluno_id and old_aluno_id != new_aluno_id and new_aluno_id:
         conflito = await asyncio.to_thread(
             supabase.table("resultados").select("id")
@@ -546,13 +542,30 @@ async def atualizar_upload_aluno(
                 status_code=409,
                 detail="O aluno selecionado já possui resultado para esta atividade.",
             )
-        await asyncio.to_thread(
-            supabase.table("resultados")
-            .update({"aluno_id": new_aluno_id})
-            .eq("atividade_id", atividade_id)
-            .eq("aluno_id", old_aluno_id)
-            .execute
-        )
+
+    await asyncio.to_thread(
+        supabase.table("uploads").update({"aluno_id": new_aluno_id}).eq("id", upload_id).execute
+    )
+
+    # Move o resultado do aluno anterior para o novo (caso de erro de identificação pela IA).
+    # O UNIQUE(atividade_id, aluno_id) em resultados captura race conditions concorrentes.
+    if old_aluno_id and old_aluno_id != new_aluno_id and new_aluno_id:
+        try:
+            await asyncio.to_thread(
+                supabase.table("resultados")
+                .update({"aluno_id": new_aluno_id})
+                .eq("atividade_id", atividade_id)
+                .eq("aluno_id", old_aluno_id)
+                .execute
+            )
+        except Exception as exc:
+            err = str(exc).lower()
+            if "23505" in err or "unique" in err or "duplicate" in err:
+                raise HTTPException(
+                    status_code=409,
+                    detail="O aluno selecionado já possui resultado para esta atividade.",
+                )
+            raise
 
     return {"upload_id": upload_id, "aluno_id": new_aluno_id}
 

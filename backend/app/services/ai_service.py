@@ -10,6 +10,7 @@ import hashlib
 import json
 import logging
 import random
+import time
 import traceback
 from collections import OrderedDict
 from contextvars import ContextVar
@@ -29,9 +30,11 @@ logger = logging.getLogger(__name__)
 
 # Content-addressed LRU cache: mesmas métricas → mesma análise sem chamar o LLM novamente.
 # Invalida automaticamente quando os dados mudam (nova correção concluída altera as métricas).
-# Limitado a 200 entradas para evitar crescimento ilimitado de memória.
+# Limitado a 200 entradas; cada entrada expira em 1 hora para evitar dados obsoletos.
 _CACHE_MAX_SIZE = 200
-_analise_turma_cache: OrderedDict[str, dict] = OrderedDict()
+_CACHE_TTL_SECONDS = 3600
+# Valores: (resultado: dict, timestamp: float)
+_analise_turma_cache: OrderedDict[str, tuple[dict, float]] = OrderedDict()
 
 client = AsyncOpenAI(
     api_key=settings.openai_api_key,
@@ -290,14 +293,17 @@ def _pdf_primeira_pagina_png(content: bytes) -> tuple[bytes, str]:
     """
     try:
         reader = PdfReader(BytesIO(content))
+        if not reader.pages:
+            raise RuntimeError("PDF sem páginas")
         page = reader.pages[0]
 
         try:
             import pdf2image  # optional dependency
             images = pdf2image.convert_from_bytes(content, first_page=1, last_page=1, dpi=150)
-            buf = BytesIO()
-            images[0].save(buf, format="PNG")
-            return buf.getvalue(), "image/png"
+            if images:
+                buf = BytesIO()
+                images[0].save(buf, format="PNG")
+                return buf.getvalue(), "image/png"
         except ImportError:
             pass
 
@@ -688,6 +694,10 @@ def _salvar_resultado(
         )
         .execute()
     )
+    if not resultado_resp.data:
+        raise RuntimeError(
+            f"Upsert de resultado retornou lista vazia para atividade {atividade_id}, aluno {aluno_id}"
+        )
     resultado_id = resultado_resp.data[0]["id"]
 
     respostas_rows = [
@@ -859,9 +869,12 @@ async def analisar_turma(
         ).encode()
     ).hexdigest()
     if cache_key in _analise_turma_cache:
-        _analise_turma_cache.move_to_end(cache_key)
-        logger.info("Cache hit — analise de turma '%s' reutilizada", turma_nome)
-        return _analise_turma_cache[cache_key]
+        cached_result, cached_at = _analise_turma_cache[cache_key]
+        if time.monotonic() - cached_at < _CACHE_TTL_SECONDS:
+            _analise_turma_cache.move_to_end(cache_key)
+            logger.info("Cache hit — analise de turma '%s' reutilizada", turma_nome)
+            return cached_result
+        del _analise_turma_cache[cache_key]  # expirado
 
     dist_fmt = "\n".join(
         f"  {d['faixa']}: {d['count']} aluno(s)" for d in metricas.get("distribuicao", [])
@@ -906,7 +919,7 @@ Seja especifico e baseado nos numeros. Responda em portugues."""
             )
         )
         result = json.loads(resp.choices[0].message.content or "{}")
-        _analise_turma_cache[cache_key] = result
+        _analise_turma_cache[cache_key] = (result, time.monotonic())
         if len(_analise_turma_cache) > _CACHE_MAX_SIZE:
             _analise_turma_cache.popitem(last=False)
         return result
