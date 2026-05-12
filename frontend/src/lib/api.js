@@ -211,6 +211,6 @@ export const api = {
   // ─── Pagamento ─────────────────────────────────────────────────────────────
   pagamento: {
     criarCheckout: () => request('/pagamento/checkout', { method: 'POST' }),
-    abrirPortal: () => request('/pagamento/portal'),
+    cancelar: () => request('/pagamento/cancelar', { method: 'POST' }),
   },
 }

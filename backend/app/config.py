@@ -7,10 +7,10 @@ class Settings(BaseSettings):
     openai_api_key: str
     # CORS origins (comma-separated)
     cors_origins: str = "http://localhost:5173"
-    # Stripe
-    stripe_secret_key: str = ""
-    stripe_webhook_secret: str = ""
-    stripe_price_id: str = ""
+    # AbacatePay
+    abacatepay_api_key: str = ""
+    abacatepay_webhook_secret: str = ""
+    abacatepay_preco_centavos: int = 9900  # R$ 99,00
     frontend_url: str = "http://localhost:5173"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")

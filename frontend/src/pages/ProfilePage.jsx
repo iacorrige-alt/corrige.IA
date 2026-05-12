@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { User, Lock, Zap, CheckCircle, AlertTriangle, Crown, ExternalLink } from 'lucide-react'
+import { User, Lock, Zap, CheckCircle, AlertTriangle, Crown, XCircle } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../hooks/useAuth'
 import Spinner from '../components/Spinner'
@@ -48,7 +48,7 @@ export default function ProfilePage() {
   const corOutput = pctOutput >= 100 ? 'bg-red-500' : pctOutput >= 80 ? 'bg-yellow-500' : 'bg-indigo-500'
 
   const [assinandoLoading, setAssinandoLoading] = useState(false)
-  const [portalLoading, setPortalLoading] = useState(false)
+  const [cancelandoLoading, setCancelandoLoading] = useState(false)
 
   async function handleAssinar() {
     setAssinandoLoading(true)
@@ -61,15 +61,16 @@ export default function ProfilePage() {
     }
   }
 
-  async function handlePortal() {
-    setPortalLoading(true)
+  async function handleCancelar() {
+    if (!confirm('Tem certeza que deseja cancelar sua assinatura? Seu plano voltará para o gratuito.')) return
+    setCancelandoLoading(true)
     try {
-      const { url } = await api.pagamento.abrirPortal()
-      window.open(url, '_blank', 'noopener')
+      await api.pagamento.cancelar()
+      qc.invalidateQueries({ queryKey: ['me'] })
     } catch (err) {
-      alert(err.message || 'Erro ao abrir portal.')
+      alert(err.message || 'Erro ao cancelar assinatura.')
     } finally {
-      setPortalLoading(false)
+      setCancelandoLoading(false)
     }
   }
 
@@ -207,12 +208,12 @@ export default function ProfilePage() {
               {/* Ações de assinatura */}
               {plano === 'pago' ? (
                 <button
-                  onClick={handlePortal}
-                  disabled={portalLoading}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 text-sm border border-gray-300 rounded-xl hover:bg-gray-50 disabled:opacity-50"
+                  onClick={handleCancelar}
+                  disabled={cancelandoLoading}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 text-sm border border-red-200 text-red-600 rounded-xl hover:bg-red-50 disabled:opacity-50"
                 >
-                  {portalLoading ? <Spinner size="sm" /> : <ExternalLink className="h-4 w-4 text-gray-500" />}
-                  Gerenciar assinatura
+                  {cancelandoLoading ? <Spinner size="sm" /> : <XCircle className="h-4 w-4" />}
+                  {cancelandoLoading ? 'Cancelando...' : 'Cancelar assinatura'}
                 </button>
               ) : (
                 <button

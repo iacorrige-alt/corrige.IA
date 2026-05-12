@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { Zap, X, ExternalLink, Crown } from 'lucide-react'
+import { Zap, X, Crown, AlertTriangle } from 'lucide-react'
 import { api } from '../lib/api'
 import Spinner from './Spinner'
 
 function UsageBar({ label, usado, limite }) {
-  const pct = limite > 0 ? Math.min((usado / limite) * 100, 100) : 0
+  const pct = limite > 0 ? Math.min(((usado ?? 0) / limite) * 100, 100) : 0
   const cor = pct >= 100 ? 'bg-red-500' : pct >= 80 ? 'bg-yellow-500' : 'bg-indigo-500'
   return (
     <div>
@@ -21,10 +21,6 @@ function UsageBar({ label, usado, limite }) {
 
 export default function UpgradeModal({ professor, onClose }) {
   const [loading, setLoading] = useState(false)
-  const [portalLoading, setPortalLoading] = useState(false)
-
-  const plano = professor?.plano ?? 'free_trial'
-  const temAssinatura = plano === 'pago' || !!professor?.stripe_customer_id
 
   async function handleAssinar() {
     setLoading(true)
@@ -34,18 +30,6 @@ export default function UpgradeModal({ professor, onClose }) {
     } catch (err) {
       alert(err.message || 'Erro ao iniciar pagamento.')
       setLoading(false)
-    }
-  }
-
-  async function handlePortal() {
-    setPortalLoading(true)
-    try {
-      const { url } = await api.pagamento.abrirPortal()
-      window.open(url, '_blank', 'noopener')
-    } catch (err) {
-      alert(err.message || 'Erro ao abrir portal.')
-    } finally {
-      setPortalLoading(false)
     }
   }
 
@@ -64,16 +48,14 @@ export default function UpgradeModal({ professor, onClose }) {
             <Zap className="h-5 w-5 text-amber-600" />
           </div>
           <div>
-            <h2 className="font-bold text-gray-900">
-              {plano === 'bloqueado' ? 'Cota esgotada' : 'Limite de tokens atingido'}
-            </h2>
+            <h2 className="font-bold text-gray-900">Cota de tokens esgotada</h2>
             <p className="text-xs text-gray-500">Plano gratuito</p>
           </div>
         </div>
 
         <p className="text-sm text-gray-600 mb-4">
-          Você utilizou toda a cota de tokens do plano gratuito.
-          Assine o plano pago para continuar corrigindo sem limites.
+          Você utilizou todos os tokens do plano gratuito.
+          Assine o plano mensal para continuar corrigindo provas sem limites.
         </p>
 
         {professor && (
@@ -91,26 +73,23 @@ export default function UpgradeModal({ professor, onClose }) {
           </div>
         )}
 
+        <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 mb-4 flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 text-indigo-500 mt-0.5 flex-shrink-0" />
+          <p className="text-xs text-indigo-700">
+            O pagamento é feito via <strong>PIX</strong> de forma segura pelo AbacatePay.
+            Você será redirecionado para a página de pagamento.
+          </p>
+        </div>
+
         <div className="space-y-2">
-          {!temAssinatura ? (
-            <button
-              onClick={handleAssinar}
-              disabled={loading}
-              className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 disabled:opacity-50"
-            >
-              {loading ? <Spinner size="sm" /> : <Crown className="h-4 w-4" />}
-              {loading ? 'Redirecionando...' : 'Assinar plano pago'}
-            </button>
-          ) : (
-            <button
-              onClick={handlePortal}
-              disabled={portalLoading}
-              className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 disabled:opacity-50"
-            >
-              {portalLoading ? <Spinner size="sm" /> : <ExternalLink className="h-4 w-4" />}
-              {portalLoading ? 'Abrindo...' : 'Gerenciar assinatura'}
-            </button>
-          )}
+          <button
+            onClick={handleAssinar}
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 disabled:opacity-50"
+          >
+            {loading ? <Spinner size="sm" /> : <Crown className="h-4 w-4" />}
+            {loading ? 'Redirecionando...' : 'Assinar agora — PIX'}
+          </button>
           <button
             onClick={onClose}
             className="w-full py-2.5 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-xl"
