@@ -10,6 +10,7 @@ import hashlib
 import json
 import logging
 import random
+import threading
 import time
 import traceback
 from collections import OrderedDict
@@ -35,6 +36,7 @@ _CACHE_MAX_SIZE = 200
 _CACHE_TTL_SECONDS = 3600
 # Valores: (resultado: dict, timestamp: float)
 _analise_turma_cache: OrderedDict[str, tuple[dict, float]] = OrderedDict()
+_analise_turma_cache_lock = threading.Lock()  # protege leitura+escrita atômica no LRU
 
 client = AsyncOpenAI(
     api_key=settings.openai_api_key,
@@ -868,13 +870,14 @@ async def analisar_turma(
             sort_keys=True,
         ).encode()
     ).hexdigest()
-    if cache_key in _analise_turma_cache:
-        cached_result, cached_at = _analise_turma_cache[cache_key]
-        if time.monotonic() - cached_at < _CACHE_TTL_SECONDS:
-            _analise_turma_cache.move_to_end(cache_key)
-            logger.info("Cache hit — analise de turma '%s' reutilizada", turma_nome)
-            return cached_result
-        del _analise_turma_cache[cache_key]  # expirado
+    with _analise_turma_cache_lock:
+        if cache_key in _analise_turma_cache:
+            cached_result, cached_at = _analise_turma_cache[cache_key]
+            if time.monotonic() - cached_at < _CACHE_TTL_SECONDS:
+                _analise_turma_cache.move_to_end(cache_key)
+                logger.info("Cache hit — analise de turma '%s' reutilizada", turma_nome)
+                return cached_result
+            del _analise_turma_cache[cache_key]  # expirado
 
     dist_fmt = "\n".join(
         f"  {d['faixa']}: {d['count']} aluno(s)" for d in metricas.get("distribuicao", [])
@@ -919,9 +922,10 @@ Seja especifico e baseado nos numeros. Responda em portugues."""
             )
         )
         result = json.loads(resp.choices[0].message.content or "{}")
-        _analise_turma_cache[cache_key] = (result, time.monotonic())
-        if len(_analise_turma_cache) > _CACHE_MAX_SIZE:
-            _analise_turma_cache.popitem(last=False)
+        with _analise_turma_cache_lock:
+            _analise_turma_cache[cache_key] = (result, time.monotonic())
+            if len(_analise_turma_cache) > _CACHE_MAX_SIZE:
+                _analise_turma_cache.popitem(last=False)
         return result
     except Exception as exc:
         logger.error("Erro na analise de turma: %s", exc)

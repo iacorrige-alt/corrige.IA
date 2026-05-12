@@ -11,6 +11,15 @@ from app.utils import ler_arquivo
 router = APIRouter(tags=["alunos"])
 
 
+def _gerar_initials(nome: str) -> str:
+    parts = nome.strip().split()
+    if len(parts) >= 2:
+        return (parts[0][0] + parts[-1][0]).upper()
+    word = parts[0] if parts else "X"
+    # Nome de 1 palavra: usa os 2 primeiros chars; se tiver só 1 char, duplica.
+    return (word[:2] if len(word) >= 2 else word[0] * 2).upper()
+
+
 @router.get("/turmas/{turma_id}/alunos", response_model=list[AlunoOut])
 async def listar_alunos(turma_id: str, current_user: dict = Depends(get_current_user)):
     supabase = get_supabase()
@@ -52,12 +61,7 @@ async def criar_aluno(
     if not turma.data:
         raise HTTPException(status_code=404, detail="Turma não encontrada.")
 
-    parts = body.nome.strip().split()
-    if len(parts) >= 2:
-        initials = (parts[0][0] + parts[-1][0]).upper()
-    else:
-        initials = parts[0][:2].upper()
-
+    initials = _gerar_initials(body.nome)
     result = await asyncio.to_thread(
         supabase.table("alunos")
         .insert({"turma_id": turma_id, "nome": body.nome, "initials": initials})
@@ -102,8 +106,7 @@ async def importar_alunos_csv(
     criados: list[str] = []
     erros: list[str] = []
     for nome in nomes[:200]:
-        parts = nome.split()
-        initials = (parts[0][0] + parts[-1][0]).upper() if len(parts) >= 2 else parts[0][:2].upper()
+        initials = _gerar_initials(nome)
         try:
             result = await asyncio.to_thread(
                 supabase.table("alunos")
@@ -140,9 +143,7 @@ async def atualizar_aluno(
     if not turma.data:
         raise HTTPException(status_code=403, detail="Acesso negado.")
 
-    parts = body.nome.strip().split()
-    initials = (parts[0][0] + parts[-1][0]).upper() if len(parts) >= 2 else parts[0][:2].upper()
-
+    initials = _gerar_initials(body.nome)
     result = await asyncio.to_thread(
         supabase.table("alunos")
         .update({"nome": body.nome, "initials": initials})

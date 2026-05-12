@@ -82,19 +82,8 @@ async def upload_provas(
             "content_type": content_type,
         })
 
-    try:
-        records = await asyncio.to_thread(supabase.table("uploads").insert(rows).execute)
-    except Exception as exc:
-        for path in storage_paths:
-            try:
-                await asyncio.to_thread(supabase.storage.from_("provas").remove, [path])
-            except Exception:
-                pass
-        raise HTTPException(status_code=500, detail="Erro ao registrar uploads.") from exc
-
-    upload_ids = [r["id"] for r in records.data]
-
-    # Lock atômico: só transiciona para "corrigindo" se ainda não estiver nesse estado.
+    # Lock atômico ANTES do insert no DB: garante que se o lock falhar, nenhuma
+    # linha de upload fica órfã apontando para arquivos que serão deletados do storage.
     now_utc = datetime.now(timezone.utc).isoformat()
     lock = await asyncio.to_thread(
         supabase.table("atividades")
@@ -113,6 +102,19 @@ async def upload_provas(
             status_code=409,
             detail="Correção já em andamento. Aguarde a conclusão antes de enviar novos arquivos.",
         )
+
+    try:
+        records = await asyncio.to_thread(supabase.table("uploads").insert(rows).execute)
+    except Exception as exc:
+        for path in storage_paths:
+            try:
+                await asyncio.to_thread(supabase.storage.from_("provas").remove, [path])
+            except Exception:
+                pass
+        raise HTTPException(status_code=500, detail="Erro ao registrar uploads.") from exc
+
+    upload_ids = [r["id"] for r in records.data]
+
     background_tasks.add_task(corrigir_atividade, atividade_id, current_user["id"], upload_ids)
 
     return UploadResponse(
