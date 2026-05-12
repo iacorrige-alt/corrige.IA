@@ -172,6 +172,8 @@ export default function AtividadeDetailPage() {
   // Uploads list
   const [showUploads, setShowUploads] = useState(false)
   const [deletingUploadId, setDeletingUploadId] = useState(null)
+  const [savingAlunoUploadId, setSavingAlunoUploadId] = useState(null)
+  const [correndo, setCorrendo] = useState(null)
 
   const { data: atividade } = useQuery({
     queryKey: ['atividade', id],
@@ -257,6 +259,12 @@ export default function AtividadeDetailPage() {
     queryKey: ['uploads', id],
     queryFn: () => api.atividades.listarUploads(id),
     enabled: showUploads,
+  })
+
+  const { data: alunos = [] } = useQuery({
+    queryKey: ['alunos', atividade?.turma_id],
+    queryFn: () => api.alunos.list(atividade.turma_id),
+    enabled: showUploads && !!atividade?.turma_id,
   })
 
   async function handleExportCsv() {
@@ -616,39 +624,88 @@ export default function AtividadeDetailPage() {
             ) : uploads.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-2">Nenhum arquivo enviado.</p>
             ) : (
-              <div className="space-y-2">
-                {uploads.map((u) => (
-                  <div key={u.id} className="flex items-center gap-3 py-1.5">
-                    <FileText className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-700 truncate">{u.aluno_nome || 'Aluno não identificado'}</p>
-                      <p className="text-xs text-gray-400">{u.tipo_arquivo} · {u.content_type}</p>
+              <div className="space-y-3">
+                {uploads.map((u) => {
+                  const semResultado = u.aluno_id && !resultados.some((r) => r.aluno_id === u.aluno_id)
+                  return (
+                    <div key={u.id} className={`rounded-xl border p-3 ${!u.aluno_id ? 'border-orange-200 bg-orange-50' : 'border-gray-100 bg-gray-50'}`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <FileText className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                        <span className={`text-sm font-medium flex-1 truncate ${!u.aluno_id ? 'text-orange-700' : 'text-gray-700'}`}>
+                          {u.aluno_nome || 'Aluno não identificado'}
+                        </span>
+                        {u.signed_url && (
+                          <a href={u.signed_url} target="_blank" rel="noopener noreferrer"
+                            className="text-xs text-indigo-600 hover:underline flex-shrink-0 flex items-center gap-1">
+                            <ExternalLink className="h-3 w-3" /> Abrir
+                          </a>
+                        )}
+                        <button
+                          disabled={deletingUploadId === u.id}
+                          onClick={async () => {
+                            if (!confirm('Remover este arquivo? Esta ação não pode ser desfeita.')) return
+                            setDeletingUploadId(u.id)
+                            try {
+                              await api.atividades.deleteUpload(id, u.id)
+                              qc.invalidateQueries({ queryKey: ['uploads', id] })
+                            } finally { setDeletingUploadId(null) }
+                          }}
+                          className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-40 flex-shrink-0"
+                          title="Remover arquivo"
+                        >
+                          {deletingUploadId === u.id ? <Spinner size="sm" /> : <Trash2 className="h-3.5 w-3.5" />}
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <select
+                          disabled={savingAlunoUploadId === u.id}
+                          value={u.aluno_id || ''}
+                          onChange={async (e) => {
+                            const alunoId = e.target.value || null
+                            setSavingAlunoUploadId(u.id)
+                            try {
+                              await api.atividades.updateUploadAluno(id, u.id, alunoId)
+                              qc.invalidateQueries({ queryKey: ['uploads', id] })
+                              qc.invalidateQueries({ queryKey: ['resultados', id] })
+                            } finally { setSavingAlunoUploadId(null) }
+                          }}
+                          className="flex-1 min-w-0 text-xs border border-gray-300 rounded-lg px-2 py-1.5 outline-none focus:ring-2 focus:ring-indigo-500 bg-white disabled:opacity-50"
+                        >
+                          <option value="">— Selecionar aluno —</option>
+                          {alunos.map((a) => (
+                            <option key={a.id} value={a.id}>{a.nome}</option>
+                          ))}
+                        </select>
+
+                        {semResultado && (
+                          <button
+                            disabled={correndo === u.id}
+                            onClick={async () => {
+                              if (!confirm('Corrigir este arquivo com IA? Consumirá tokens da sua conta.')) return
+                              setCorrendo(u.id)
+                              try {
+                                await api.atividades.corrigirUpload(id, u.id)
+                                setTimeout(() => {
+                                  qc.invalidateQueries({ queryKey: ['resultados', id] })
+                                  qc.invalidateQueries({ queryKey: ['uploads', id] })
+                                  setCorrendo(null)
+                                }, 8000)
+                              } catch (err) {
+                                alert(err.message)
+                                setCorrendo(null)
+                              }
+                            }}
+                            className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex-shrink-0"
+                          >
+                            {correndo === u.id ? <Spinner size="sm" /> : <Brain className="h-3 w-3" />}
+                            {correndo === u.id ? 'Corrigindo...' : 'Corrigir'}
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    {u.signed_url && (
-                      <a href={u.signed_url} target="_blank" rel="noopener noreferrer"
-                        className="text-xs text-indigo-600 hover:underline flex-shrink-0">
-                        Abrir
-                      </a>
-                    )}
-                    <button
-                      disabled={deletingUploadId === u.id}
-                      onClick={async () => {
-                        if (!confirm('Remover este arquivo? Esta ação não pode ser desfeita.')) return
-                        setDeletingUploadId(u.id)
-                        try {
-                          await api.atividades.deleteUpload(id, u.id)
-                          qc.invalidateQueries({ queryKey: ['uploads', id] })
-                        } finally {
-                          setDeletingUploadId(null)
-                        }
-                      }}
-                      className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40 flex-shrink-0"
-                      title="Remover arquivo"
-                    >
-                      {deletingUploadId === u.id ? <Spinner size="sm" /> : <Trash2 className="h-3.5 w-3.5" />}
-                    </button>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>

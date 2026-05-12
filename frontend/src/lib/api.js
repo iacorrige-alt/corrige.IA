@@ -170,6 +170,10 @@ export const api = {
     listarUploads: (id) => request(`/atividades/${id}/uploads`),
     deleteUpload: (atividadeId, uploadId) =>
       request(`/atividades/${atividadeId}/uploads/${uploadId}`, { method: 'DELETE' }),
+    updateUploadAluno: (atividadeId, uploadId, alunoId) =>
+      request(`/atividades/${atividadeId}/uploads/${uploadId}`, { method: 'PATCH', body: JSON.stringify({ aluno_id: alunoId }) }),
+    corrigirUpload: (atividadeId, uploadId) =>
+      request(`/atividades/${atividadeId}/uploads/${uploadId}/corrigir`, { method: 'POST' }),
     updateResposta: (atividadeId, respostaId, data) =>
       request(`/atividades/${atividadeId}/respostas/${respostaId}`, { method: 'PATCH', body: JSON.stringify(data) }),
     extrairQuestoesPdf: (file) => {

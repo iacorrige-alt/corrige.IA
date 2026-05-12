@@ -13,7 +13,7 @@ from fastapi.responses import StreamingResponse
 from app.models.schemas import (
     AtividadeCreate, AtividadeOut, AtividadeUpdate,
     QuestaoCreate, QuestaoOut, QuestaoUpdate,
-    ResultadoOut, UploadOut, RespostaUpdate,
+    ResultadoOut, UploadOut, RespostaUpdate, UploadAlunoUpdate,
 )
 from app.db.supabase_client import get_supabase
 from app.dependencies import get_current_user
@@ -507,6 +507,82 @@ async def editar_resposta(
     )
 
     return {"nota": nova_nota, "status": novo_status, "nota_total": round(nota_total, 2)}
+
+
+@router.patch("/{atividade_id}/uploads/{upload_id}")
+async def atualizar_upload_aluno(
+    atividade_id: str,
+    upload_id: str,
+    body: UploadAlunoUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    supabase = get_supabase()
+
+    ativ = await asyncio.to_thread(
+        supabase.table("atividades").select("id, status")
+        .eq("id", atividade_id).eq("professor_id", current_user["id"]).single().execute
+    )
+    if not ativ.data:
+        raise HTTPException(status_code=404, detail="Atividade não encontrada.")
+    if ativ.data["status"] == "corrigindo":
+        raise HTTPException(status_code=409, detail="Não é possível alterar uploads durante a correção.")
+
+    upload_resp = await asyncio.to_thread(
+        supabase.table("uploads").select("id, aluno_id")
+        .eq("id", upload_id).eq("atividade_id", atividade_id).single().execute
+    )
+    if not upload_resp.data:
+        raise HTTPException(status_code=404, detail="Upload não encontrado.")
+
+    old_aluno_id = upload_resp.data.get("aluno_id")
+    new_aluno_id = body.aluno_id
+
+    await asyncio.to_thread(
+        supabase.table("uploads").update({"aluno_id": new_aluno_id}).eq("id", upload_id).execute
+    )
+
+    # Move o resultado do aluno anterior para o novo (caso de erro de identificação pela IA)
+    if old_aluno_id and old_aluno_id != new_aluno_id and new_aluno_id:
+        await asyncio.to_thread(
+            supabase.table("resultados")
+            .update({"aluno_id": new_aluno_id})
+            .eq("atividade_id", atividade_id)
+            .eq("aluno_id", old_aluno_id)
+            .execute
+        )
+
+    return {"upload_id": upload_id, "aluno_id": new_aluno_id}
+
+
+@router.post("/{atividade_id}/uploads/{upload_id}/corrigir", status_code=202)
+async def corrigir_upload_individual(
+    atividade_id: str,
+    upload_id: str,
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user),
+):
+    from app.services.ai_service import corrigir_upload as _corrigir_upload
+
+    supabase = get_supabase()
+
+    ativ = await asyncio.to_thread(
+        supabase.table("atividades").select("id")
+        .eq("id", atividade_id).eq("professor_id", current_user["id"]).single().execute
+    )
+    if not ativ.data:
+        raise HTTPException(status_code=404, detail="Atividade não encontrada.")
+
+    upload_resp = await asyncio.to_thread(
+        supabase.table("uploads").select("id, aluno_id")
+        .eq("id", upload_id).eq("atividade_id", atividade_id).single().execute
+    )
+    if not upload_resp.data:
+        raise HTTPException(status_code=404, detail="Upload não encontrado.")
+    if not upload_resp.data.get("aluno_id"):
+        raise HTTPException(status_code=400, detail="Associe um aluno ao arquivo antes de corrigir.")
+
+    background_tasks.add_task(_corrigir_upload, upload_id, atividade_id, current_user["id"])
+    return {"message": "Correção iniciada.", "upload_id": upload_id}
 
 
 @router.delete("/{atividade_id}/uploads/{upload_id}", status_code=204)

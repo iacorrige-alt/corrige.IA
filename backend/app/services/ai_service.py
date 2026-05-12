@@ -695,6 +695,46 @@ def _salvar_resultado(
             supabase.table("respostas").delete().in_("id", old_ids).execute()
 
 
+async def corrigir_upload(upload_id: str, atividade_id: str, professor_id: str) -> None:
+    """Background task: re-run AI correction for a single upload (already associated to a student)."""
+    supabase = get_supabase()
+    acc: list[int] = []
+    ctx_token = _token_accumulator.set(acc)
+    try:
+        ativ_resp = await asyncio.to_thread(
+            supabase.table("atividades").select("*, questoes(*)")
+            .eq("id", atividade_id).single().execute
+        )
+        ativ = ativ_resp.data
+        questoes = sorted(ativ.get("questoes", []), key=lambda q: q["ordem"])
+
+        upload_resp = await asyncio.to_thread(
+            supabase.table("uploads").select("*").eq("id", upload_id).single().execute
+        )
+        upload = upload_resp.data
+        if not upload.get("aluno_id"):
+            logger.warning("corrigir_upload chamado sem aluno_id no upload %s — abortado", upload_id)
+            return
+
+        alunos_resp = await asyncio.to_thread(
+            supabase.table("alunos").select("*").eq("turma_id", ativ["turma_id"]).execute
+        )
+        alunos = alunos_resp.data
+
+        gabarito_pdf_texto = await _extrair_gabarito_pdf(ativ)
+        rubricas_autonomas: dict[str, dict] = {}
+        if not _tem_gabarito(ativ, questoes, gabarito_pdf_texto):
+            rubricas_autonomas = await _gerar_rubrica_autonoma(questoes, ativ)
+
+        await _processar_upload(upload, ativ, questoes, alunos, gabarito_pdf_texto, rubricas_autonomas)
+        await detectar_copias(atividade_id)
+    except Exception:
+        logger.error("Erro ao corrigir upload %s:\n%s", upload_id, traceback.format_exc())
+    finally:
+        _token_accumulator.reset(ctx_token)
+        await _registrar_tokens(professor_id, sum(acc))
+
+
 # ─── Extração de questões de PDF ─────────────────────────────────────────────
 
 async def extrair_questoes_pdf(content: bytes, content_type: str, professor_id: str | None = None) -> list[dict]:

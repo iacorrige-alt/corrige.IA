@@ -384,3 +384,7 @@ class UploadOut(BaseModel):
     content_type: str
     tipo_arquivo: str
     signed_url: Optional[str] = None
+
+
+class UploadAlunoUpdate(BaseModel):
+    aluno_id: Optional[str] = None
