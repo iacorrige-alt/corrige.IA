@@ -170,6 +170,79 @@ class TestIDOR:
         assert resp.status_code not in (403, 404)
 
 
+class TestLockOrdemUpload:
+    """Regressão: lock atômico deve ser adquirido ANTES do insert em uploads.
+    Se o lock falhar (atividade já em 'corrigindo'), nenhuma linha de upload
+    deve ser inserida no DB — evita uploads órfãos.
+    """
+
+    def test_lock_falha_nao_chama_insert(self, client_auth):
+        mock_sb = MagicMock()
+
+        # atividade lookup: encontrada, status=pendente
+        (
+            mock_sb.table.return_value
+            .select.return_value
+            .eq.return_value
+            .eq.return_value
+            .single.return_value
+            .execute.return_value
+        ) = MagicMock(data={"id": "ativ-A", "status": "pendente"})
+
+        # lock atômico retorna data=[] → lock falhou (outro request foi mais rápido)
+        mock_sb.table.return_value.update.return_value.eq.return_value.neq.return_value.execute.return_value = MagicMock(data=[])
+
+        fake_file = io.BytesIO(b"conteudo")
+
+        insert_mock = mock_sb.table.return_value.insert.return_value.execute
+
+        with patch("app.routers.correcao.get_supabase", return_value=mock_sb), \
+             patch("app.routers.correcao.checar_limite_tokens", new=AsyncMock()), \
+             patch("app.routers.correcao.upload_file", new=AsyncMock(return_value="ativ-A/fake.jpg")):
+            resp = client_auth.post(
+                "/atividades/ativ-A/upload",
+                files={"files": ("prova.jpg", fake_file, "image/jpeg")},
+            )
+
+        assert resp.status_code == 409
+        # Insert em uploads NÃO deve ter sido chamado
+        insert_mock.assert_not_called()
+
+    def test_lock_sucesso_chama_insert(self, client_auth):
+        mock_sb = MagicMock()
+
+        (
+            mock_sb.table.return_value
+            .select.return_value
+            .eq.return_value
+            .eq.return_value
+            .single.return_value
+            .execute.return_value
+        ) = MagicMock(data={"id": "ativ-A", "status": "pendente"})
+
+        # lock retorna data com 1 item → sucesso
+        mock_sb.table.return_value.update.return_value.eq.return_value.neq.return_value.execute.return_value = MagicMock(
+            data=[{"id": "ativ-A", "status": "corrigindo"}]
+        )
+        mock_sb.table.return_value.insert.return_value.execute.return_value = MagicMock(
+            data=[{"id": "upload-1"}]
+        )
+
+        fake_file = io.BytesIO(b"conteudo")
+
+        with patch("app.routers.correcao.get_supabase", return_value=mock_sb), \
+             patch("app.routers.correcao.checar_limite_tokens", new=AsyncMock()), \
+             patch("app.routers.correcao.upload_file", new=AsyncMock(return_value="ativ-A/fake.jpg")), \
+             patch("app.routers.correcao.corrigir_atividade"):
+            resp = client_auth.post(
+                "/atividades/ativ-A/upload",
+                files={"files": ("prova.jpg", fake_file, "image/jpeg")},
+            )
+
+        assert resp.status_code == 200
+        mock_sb.table.return_value.insert.return_value.execute.assert_called_once()
+
+
 class TestQuotaUpload:
     """Upload deve ser bloqueado com 402 quando a cota de tokens está esgotada."""
 

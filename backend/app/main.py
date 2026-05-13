@@ -13,7 +13,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from app.config import settings
 from app.limiter import limiter
-from app.routers import auth, turmas, alunos, atividades, correcao, pagamento, webhooks
+from app.routers import auth, turmas, alunos, atividades, correcao, pagamento, webhooks, agente
 
 
 # Snapshot of standard LogRecord instance keys — used to detect extra={} keys reliably.
@@ -107,8 +107,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 # Routers
@@ -119,6 +119,7 @@ app.include_router(atividades.router)
 app.include_router(correcao.router)
 app.include_router(pagamento.router)
 app.include_router(webhooks.router)
+app.include_router(agente.router)
 
 
 @app.get("/health")
