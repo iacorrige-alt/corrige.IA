@@ -47,7 +47,7 @@ export default function AlunoDashboardPage() {
 
       {/* Header */}
       <div className="flex items-center gap-3 sm:gap-4 mb-6 sm:mb-8">
-        <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-xl sm:text-2xl flex-shrink-0">
+        <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-brand-50 flex items-center justify-center text-brand-600 font-bold text-xl sm:text-2xl flex-shrink-0">
           {aluno.initials}
         </div>
         <div className="min-w-0">
@@ -71,7 +71,7 @@ export default function AlunoDashboardPage() {
           <p className="text-xs text-gray-500 mt-1">Atividades</p>
         </div>
         <div className="bg-white rounded-2xl p-3 sm:p-5 border border-gray-100 shadow-sm text-center">
-          <p className="text-2xl sm:text-4xl font-bold text-indigo-600">{flags_detectadas.length}</p>
+          <p className="text-2xl sm:text-4xl font-bold text-accent-500">{flags_detectadas.length}</p>
           <p className="text-xs text-gray-500 mt-1">Alertas</p>
         </div>
       </div>
@@ -81,7 +81,7 @@ export default function AlunoDashboardPage() {
         {/* Evolução */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
           <div className="flex items-center gap-2 mb-4">
-            <TrendingUp className="h-5 w-5 text-indigo-600" />
+            <TrendingUp className="h-5 w-5 text-accent-500" />
             <h2 className="font-semibold text-gray-900 text-sm sm:text-base">Evolução de Notas</h2>
           </div>
           {evolucao.length === 0 ? (
@@ -120,9 +120,9 @@ export default function AlunoDashboardPage() {
       </div>
 
       {/* AI Analysis */}
-      <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl border border-indigo-100 p-4 sm:p-6">
+      <div className="bg-gradient-to-r from-brand-50 to-brick-50 rounded-2xl border border-brand-100 p-4 sm:p-6">
         <div className="flex items-start gap-3">
-          <div className="p-2 bg-indigo-600 rounded-xl flex-shrink-0">
+          <div className="p-2 bg-accent-500 rounded-xl flex-shrink-0">
             <Brain className="h-5 w-5 text-white" />
           </div>
           <div className="min-w-0">

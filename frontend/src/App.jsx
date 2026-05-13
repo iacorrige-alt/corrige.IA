@@ -58,24 +58,24 @@ function ProtectedLayout() {
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-cream">
       <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} />
 
       <div className="flex-1 flex flex-col min-w-0">
         {/* Mobile top bar */}
-        <header className="md:hidden sticky top-0 z-30 flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-200">
+        <header className="md:hidden sticky top-0 z-30 flex items-center gap-3 px-4 py-3 bg-brand-600 border-b border-brand-700">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="p-2 hover:bg-gray-100 rounded-lg text-gray-600"
+            className="p-2 hover:bg-white/10 rounded-lg text-white/70"
             aria-label="Abrir menu"
           >
             <Menu className="h-5 w-5" />
           </button>
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center">
+            <div className="w-7 h-7 bg-white/15 rounded-lg flex items-center justify-center">
               <Brain className="h-4 w-4 text-white" />
             </div>
-            <span className="font-bold text-gray-900 text-sm">CorrigeAI</span>
+            <span className="font-bold text-white text-sm">CorrigeAI</span>
           </div>
         </header>
 

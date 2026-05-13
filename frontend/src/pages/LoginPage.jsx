@@ -42,11 +42,11 @@ export default function LoginPage() {
   const isRegister = mode === 'register'
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-cream via-white to-brick-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-indigo-600 rounded-2xl shadow-lg mb-4">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-600 rounded-2xl shadow-lg mb-4">
             <Brain className="h-9 w-9 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-gray-900">CorrigeAI</h1>
@@ -62,7 +62,7 @@ export default function LoginPage() {
               onClick={() => switchMode('login')}
               className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${
                 !isRegister
-                  ? 'bg-white text-indigo-700 shadow'
+                  ? 'bg-white text-accent-600 shadow'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
@@ -73,7 +73,7 @@ export default function LoginPage() {
               onClick={() => switchMode('register')}
               className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${
                 isRegister
-                  ? 'bg-white text-indigo-700 shadow'
+                  ? 'bg-white text-accent-600 shadow'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
@@ -99,7 +99,7 @@ export default function LoginPage() {
                   onChange={(e) => setNome(e.target.value)}
                   required
                   placeholder="Prof. Ana Souza"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition text-sm"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-accent-500 focus:border-accent-500 outline-none transition text-sm"
                 />
               </div>
             )}
@@ -114,7 +114,7 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 placeholder="professor@escola.com"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition text-sm"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-accent-500 focus:border-accent-500 outline-none transition text-sm"
               />
             </div>
 
@@ -130,7 +130,7 @@ export default function LoginPage() {
                   required
                   minLength={isRegister ? 6 : undefined}
                   placeholder="••••••••"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition text-sm pr-10"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-accent-500 focus:border-accent-500 outline-none transition text-sm pr-10"
                 />
                 <button
                   type="button"
@@ -145,7 +145,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-indigo-600 text-white py-2.5 rounded-xl font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2"
+              className="w-full bg-accent-500 text-white py-2.5 rounded-xl font-medium hover:bg-accent-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2"
             >
               {loading ? <Spinner size="sm" /> : null}
               {loading

@@ -2,7 +2,7 @@ const variants = {
   correto: 'bg-green-100 text-green-700',
   parcial: 'bg-yellow-100 text-yellow-700',
   errado: 'bg-red-100 text-red-700',
-  ia: 'bg-purple-100 text-purple-700',
+  ia: 'bg-brick-100 text-brick-600',
   copia: 'bg-orange-100 text-orange-700',
   plagio: 'bg-red-100 text-red-800',
   concluida: 'bg-green-100 text-green-700',

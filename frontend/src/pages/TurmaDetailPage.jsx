@@ -123,7 +123,7 @@ export default function TurmaDetailPage() {
         <div className="flex gap-2 w-full sm:w-auto">
           <Link
             to={`/turmas/${id}/dashboard`}
-            className="flex items-center justify-center gap-2 border border-indigo-300 text-indigo-600 px-4 py-2.5 rounded-xl font-medium hover:bg-indigo-50 transition-colors flex-1 sm:flex-none"
+            className="flex items-center justify-center gap-2 border border-accent-300 text-accent-500 px-4 py-2.5 rounded-xl font-medium hover:bg-accent-50 transition-colors flex-1 sm:flex-none"
           >
             <BarChart2 className="h-5 w-5" /> Dashboard
           </Link>
@@ -136,7 +136,7 @@ export default function TurmaDetailPage() {
           </button>
           <button
             onClick={() => setModalOpen(true)}
-            className="flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2.5 rounded-xl font-medium hover:bg-indigo-700 transition-colors flex-1 sm:flex-none"
+            className="flex items-center justify-center gap-2 bg-accent-500 text-white px-4 py-2.5 rounded-xl font-medium hover:bg-accent-600 transition-colors flex-1 sm:flex-none"
           >
             <Plus className="h-5 w-5" /> Adicionar Aluno
           </button>
@@ -157,7 +157,7 @@ export default function TurmaDetailPage() {
         <div className="text-center py-20 bg-white rounded-2xl border border-gray-100">
           <User className="h-12 w-12 text-gray-300 mx-auto mb-3" />
           <p className="text-gray-500">Nenhum aluno cadastrado ainda.</p>
-          <button onClick={() => setModalOpen(true)} className="mt-3 text-indigo-600 hover:underline text-sm">
+          <button onClick={() => setModalOpen(true)} className="mt-3 text-accent-500 hover:underline text-sm">
             Adicionar primeiro aluno
           </button>
         </div>
@@ -174,7 +174,7 @@ export default function TurmaDetailPage() {
               key={aluno.id}
               className="flex items-center gap-3 px-4 sm:px-6 py-4 border-b border-gray-50 last:border-0 hover:bg-gray-50"
             >
-              <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-semibold text-sm flex-shrink-0">
+              <div className="w-9 h-9 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 font-semibold text-sm flex-shrink-0">
                 {aluno.initials}
               </div>
               <div className="flex-1 min-w-0">
@@ -184,7 +184,7 @@ export default function TurmaDetailPage() {
                     onChange={(e) => setEditNome(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') cancelEdit() }}
                     autoFocus
-                    className="w-full text-sm border border-indigo-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    className="w-full text-sm border border-accent-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-accent-500 outline-none"
                   />
                 ) : (
                   <>
@@ -209,11 +209,11 @@ export default function TurmaDetailPage() {
                 ) : (
                   <>
                     <button onClick={() => startEdit(aluno)}
-                      className="p-1.5 text-gray-300 hover:text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors">
+                      className="p-1.5 text-gray-300 hover:text-accent-500 hover:bg-accent-50 rounded-lg transition-colors">
                       <Pencil className="h-4 w-4" />
                     </button>
                     <Link to={`/alunos/${aluno.id}`}
-                      className="text-xs text-indigo-600 hover:underline px-2 sm:px-3 py-1.5 rounded-lg hover:bg-indigo-50 whitespace-nowrap">
+                      className="text-xs text-accent-500 hover:underline px-2 sm:px-3 py-1.5 rounded-lg hover:bg-accent-50 whitespace-nowrap">
                       Dashboard
                     </Link>
                     <button
@@ -240,7 +240,7 @@ export default function TurmaDetailPage() {
               value={nome}
               onChange={(e) => setNome(e.target.value)}
               placeholder="Nome do aluno"
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-accent-500 outline-none"
             />
           </div>
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
@@ -249,7 +249,7 @@ export default function TurmaDetailPage() {
               Cancelar
             </button>
             <button type="submit" disabled={createMutation.isPending}
-              className="flex-1 bg-indigo-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2">
+              className="flex-1 bg-accent-500 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-accent-600 disabled:opacity-50 flex items-center justify-center gap-2">
               {createMutation.isPending && <Spinner size="sm" />}
               Adicionar
             </button>

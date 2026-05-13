@@ -15,7 +15,7 @@ function Section({ icon: Icon, title, children }) {
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
       <div className="flex items-center gap-2 mb-5">
-        <Icon className="h-5 w-5 text-indigo-500" />
+        <Icon className="h-5 w-5 text-accent-500" />
         <h2 className="font-semibold text-gray-900">{title}</h2>
       </div>
       {children}
@@ -50,8 +50,8 @@ export default function ProfilePage() {
   const outputLimite = professor?.output_tokens_limite ?? 2000000
   const pctInput = inputLimite > 0 ? Math.min((inputUsado / inputLimite) * 100, 100) : 0
   const pctOutput = outputLimite > 0 ? Math.min((outputUsado / outputLimite) * 100, 100) : 0
-  const corInput = pctInput >= 100 ? 'bg-red-500' : pctInput >= 80 ? 'bg-yellow-500' : 'bg-indigo-500'
-  const corOutput = pctOutput >= 100 ? 'bg-red-500' : pctOutput >= 80 ? 'bg-yellow-500' : 'bg-indigo-500'
+  const corInput = pctInput >= 100 ? 'bg-red-500' : pctInput >= 80 ? 'bg-yellow-500' : 'bg-accent-500'
+  const corOutput = pctOutput >= 100 ? 'bg-red-500' : pctOutput >= 80 ? 'bg-yellow-500' : 'bg-accent-500'
 
   const [loadingPacote, setLoadingPacote] = useState(null)
 
@@ -124,7 +124,7 @@ export default function ProfilePage() {
                 <input
                   value={nome || nomeAtual}
                   onChange={(e) => setNome(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-accent-500 outline-none"
                 />
               </div>
               <div>
@@ -144,7 +144,7 @@ export default function ProfilePage() {
               <button
                 type="submit"
                 disabled={nomeSaving || (!nome.trim() || nome.trim() === nomeAtual)}
-                className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
+                className="px-5 py-2.5 bg-accent-500 text-white rounded-xl text-sm font-medium hover:bg-accent-600 disabled:opacity-50 flex items-center gap-2"
               >
                 {nomeSaving && <Spinner size="sm" />}
                 Salvar nome
@@ -202,7 +202,7 @@ export default function ProfilePage() {
                       disabled={!!loadingPacote}
                       className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors disabled:opacity-60 ${
                         destaque
-                          ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700'
+                          ? 'bg-accent-500 text-white border-accent-500 hover:bg-accent-600'
                           : 'bg-white text-gray-800 border-gray-200 hover:bg-gray-50'
                       }`}
                     >
@@ -214,7 +214,7 @@ export default function ProfilePage() {
                         )}
                       </span>
                       <span className="flex items-center gap-3">
-                        <span className={`text-xs ${destaque ? 'text-indigo-100' : 'text-gray-400'}`}>{tokens} tokens</span>
+                        <span className={`text-xs ${destaque ? 'text-white/80' : 'text-gray-400'}`}>{tokens} tokens</span>
                         <span>{preco}</span>
                       </span>
                     </button>
@@ -234,7 +234,7 @@ export default function ProfilePage() {
                 type="password"
                 value={senhaAtual}
                 onChange={(e) => setSenhaAtual(e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-accent-500 outline-none"
                 autoComplete="current-password"
               />
             </div>
@@ -244,7 +244,7 @@ export default function ProfilePage() {
                 type="password"
                 value={novaSenha}
                 onChange={(e) => setNovaSenha(e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-accent-500 outline-none"
                 autoComplete="new-password"
               />
             </div>
@@ -254,7 +254,7 @@ export default function ProfilePage() {
                 type="password"
                 value={confirmSenha}
                 onChange={(e) => setConfirmSenha(e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-accent-500 outline-none"
                 autoComplete="new-password"
               />
             </div>
@@ -267,7 +267,7 @@ export default function ProfilePage() {
             <button
               type="submit"
               disabled={senhaSaving || !senhaAtual || !novaSenha || !confirmSenha}
-              className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
+              className="px-5 py-2.5 bg-accent-500 text-white rounded-xl text-sm font-medium hover:bg-accent-600 disabled:opacity-50 flex items-center gap-2"
             >
               {senhaSaving && <Spinner size="sm" />}
               Alterar senha

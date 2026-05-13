@@ -33,9 +33,9 @@ function AnaliseSection({ analise }) {
   return (
     <div className="space-y-4">
       {/* Resumo */}
-      <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl border border-indigo-100 p-5">
+      <div className="bg-gradient-to-r from-brand-50 to-brick-50 rounded-2xl border border-brand-100 p-5">
         <div className="flex items-start gap-3">
-          <div className="p-2 bg-indigo-600 rounded-xl flex-shrink-0">
+          <div className="p-2 bg-accent-500 rounded-xl flex-shrink-0">
             <Brain className="h-5 w-5 text-white" />
           </div>
           <div>
@@ -99,7 +99,7 @@ function AnaliseSection({ analise }) {
             onClick={() => setOpenMetodologico(!openMetodologico)}
           >
             <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-purple-100 rounded-lg">
+              <div className="p-1.5 bg-brick-100 rounded-lg">
                 <Lightbulb className="h-4 w-4 text-purple-600" />
               </div>
               <span className="font-semibold text-gray-900">Sugestões Metodológicas</span>
@@ -110,7 +110,7 @@ function AnaliseSection({ analise }) {
             <ul className="px-5 pb-5 space-y-2 border-t border-gray-50">
               {analise.sugestoes_metodologicas.map((s, i) => (
                 <li key={i} className="flex items-start gap-2 text-sm text-gray-700 pt-2">
-                  <span className="w-5 h-5 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 font-bold text-xs flex-shrink-0 mt-0.5">{i + 1}</span>
+                  <span className="w-5 h-5 rounded-full bg-brick-100 flex items-center justify-center text-brick-600 font-bold text-xs flex-shrink-0 mt-0.5">{i + 1}</span>
                   {s}
                 </li>
               ))}
@@ -186,7 +186,7 @@ export default function TurmaDashboardPage() {
           label="Alunos Avaliados"
           value={total_alunos_avaliados}
           sub={`${total_atividades} atividade(s)`}
-          color="bg-indigo-500"
+          color="bg-accent-500"
         />
         <StatCard
           icon={AlertTriangle}
@@ -220,7 +220,7 @@ export default function TurmaDashboardPage() {
         {/* Evolução média por atividade */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
           <div className="flex items-center gap-2 mb-4">
-            <TrendingUp className="h-5 w-5 text-indigo-600" />
+            <TrendingUp className="h-5 w-5 text-accent-500" />
             <h2 className="font-semibold text-gray-900 text-sm sm:text-base">Evolução da Turma</h2>
           </div>
           {evolucao.length === 0 ? (
@@ -251,11 +251,11 @@ export default function TurmaDashboardPage() {
               return (
                 <div key={aluno.aluno_id} className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50">
                   <span className="text-xs font-bold text-gray-400 w-5 text-right flex-shrink-0">{idx + 1}</span>
-                  <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-semibold text-xs flex-shrink-0">
+                  <div className="w-8 h-8 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 font-semibold text-xs flex-shrink-0">
                     {aluno.initials}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <Link to={`/alunos/${aluno.aluno_id}`} className="text-sm font-medium text-gray-900 hover:text-indigo-600 truncate block">
+                    <Link to={`/alunos/${aluno.aluno_id}`} className="text-sm font-medium text-gray-900 hover:text-accent-500 truncate block">
                       {aluno.nome}
                     </Link>
                     <p className="text-xs text-gray-400">{aluno.total_atividades} atividade(s)</p>
@@ -274,7 +274,7 @@ export default function TurmaDashboardPage() {
       {/* Análise IA */}
       <div>
         <div className="flex items-center gap-2 mb-4">
-          <Brain className="h-5 w-5 text-indigo-600" />
+          <Brain className="h-5 w-5 text-accent-500" />
           <h2 className="font-semibold text-gray-900">Análise e Recomendações da IA</h2>
         </div>
         <AnaliseSection analise={analise_ia} />

@@ -13,7 +13,7 @@ const STEPS = [
     desc: 'Organize seus alunos por turma e disciplina.',
     to: '/turmas',
     cta: 'Ir para Turmas',
-    color: 'bg-indigo-500',
+    color: 'bg-brand-600',
   },
   {
     n: '2',
@@ -29,7 +29,7 @@ const STEPS = [
     desc: 'Informe as questões e, opcionalmente, o gabarito.',
     to: '/atividades',
     cta: 'Nova atividade',
-    color: 'bg-violet-500',
+    color: 'bg-brick-500',
   },
   {
     n: '4',
@@ -44,8 +44,8 @@ const STEPS = [
 function GettingStarted() {
   return (
     <div className="max-w-2xl mx-auto">
-      <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-5 sm:p-8 mb-6 text-center">
-        <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+      <div className="bg-brand-50 border border-brand-100 rounded-2xl p-5 sm:p-8 mb-6 text-center">
+        <div className="w-12 h-12 bg-brand-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
           <Zap className="h-6 w-6 text-white" />
         </div>
         <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-1">Bem-vindo ao CorrigeAI!</h2>
@@ -57,7 +57,7 @@ function GettingStarted() {
           <Link
             key={s.n}
             to={s.to}
-            className="flex items-center gap-4 bg-white border border-gray-100 rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all group"
+            className="flex items-center gap-4 bg-white border border-gray-100 rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-md hover:border-accent-400 transition-all group"
           >
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0 ${s.color}`}>
               {s.n}
@@ -66,7 +66,7 @@ function GettingStarted() {
               <p className="font-semibold text-gray-900 text-sm">{s.title}</p>
               <p className="text-xs text-gray-500 mt-0.5">{s.desc}</p>
             </div>
-            <ArrowRight className="h-4 w-4 text-gray-300 group-hover:text-indigo-500 transition-colors flex-shrink-0" />
+            <ArrowRight className="h-4 w-4 text-gray-300 group-hover:text-accent-500 transition-colors flex-shrink-0" />
           </Link>
         ))}
       </div>
@@ -116,7 +116,7 @@ export default function DashboardPage() {
   const tokensUsados = professor?.tokens_usados ?? 0
   const limiteTokens = professor?.limite_tokens ?? 0
   const tokenPct = limiteTokens > 0 ? Math.min((tokensUsados / limiteTokens) * 100, 100) : 0
-  const tokenColor = tokenPct >= 90 ? 'bg-red-500' : tokenPct >= 70 ? 'bg-yellow-500' : 'bg-purple-500'
+  const tokenColor = tokenPct >= 90 ? 'bg-red-500' : tokenPct >= 70 ? 'bg-yellow-500' : 'bg-brick-500'
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto">
@@ -139,7 +139,7 @@ export default function DashboardPage() {
           {/* Stats — 2 cols mobile, 3 cols md, 5 cols xl */}
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4 mb-6 sm:mb-8">
             <StatCard icon={Users} label="Total de Alunos" value={totalAlunos}
-              color="bg-indigo-500" sub={`${turmas.length} turmas`} />
+              color="bg-brand-600" sub={`${turmas.length} turmas`} />
             <StatCard icon={FileText} label="Atividades" value={atividades.length}
               color="bg-blue-500" />
             <StatCard icon={CheckCircle} label="Concluídas" value={concluidas}
@@ -155,7 +155,7 @@ export default function DashboardPage() {
           {/* Agente IA — banner promocional */}
           <Link
             to="/agente"
-            className="flex items-center gap-4 bg-gradient-to-r from-indigo-600 to-violet-600 rounded-2xl p-4 sm:p-5 mb-6 sm:mb-8 shadow-lg shadow-indigo-200 hover:shadow-indigo-300 hover:scale-[1.01] transition-all group"
+            className="flex items-center gap-4 bg-gradient-to-r from-brand-600 to-brick-500 rounded-2xl p-4 sm:p-5 mb-6 sm:mb-8 shadow-lg shadow-brand-600/20 hover:shadow-brick-500/30 hover:scale-[1.01] transition-all group"
           >
             <div className="w-11 h-11 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
               <Bot className="h-6 w-6 text-white" />
@@ -165,7 +165,7 @@ export default function DashboardPage() {
                 <p className="text-white font-bold text-sm">Agente Pedagógico IA</p>
                 <span className="bg-green-400 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none">BETA</span>
               </div>
-              <p className="text-indigo-100 text-xs leading-snug">
+              <p className="text-white/80 text-xs leading-snug">
                 Analise suas turmas, crie provas e detecte padrões de erro — tudo por conversa.
               </p>
             </div>
@@ -181,7 +181,7 @@ export default function DashboardPage() {
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="font-semibold text-gray-900 text-sm sm:text-base">Atividades Recentes</h2>
-                <Link to="/atividades" className="text-xs sm:text-sm text-indigo-600 hover:underline">
+                <Link to="/atividades" className="text-xs sm:text-sm text-accent-500 hover:underline">
                   Ver todas
                 </Link>
               </div>
@@ -208,7 +208,7 @@ export default function DashboardPage() {
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="font-semibold text-gray-900 text-sm sm:text-base">Suas Turmas</h2>
-                <Link to="/turmas" className="text-xs sm:text-sm text-indigo-600 hover:underline">
+                <Link to="/turmas" className="text-xs sm:text-sm text-accent-500 hover:underline">
                   Gerenciar
                 </Link>
               </div>

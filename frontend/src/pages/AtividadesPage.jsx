@@ -121,7 +121,7 @@ export default function AtividadesPage() {
         </div>
         <button
           onClick={() => setModalOpen(true)}
-          className="flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2.5 rounded-xl font-medium hover:bg-indigo-700 transition-colors w-full sm:w-auto"
+          className="flex items-center justify-center gap-2 bg-accent-500 text-white px-4 py-2.5 rounded-xl font-medium hover:bg-accent-600 transition-colors w-full sm:w-auto"
         >
           <Plus className="h-5 w-5" /> Nova Atividade
         </button>
@@ -223,7 +223,7 @@ export default function AtividadesPage() {
                           <div className="flex items-center justify-end">
                             <Link
                               to={`/atividades/${a.id}`}
-                              className="flex items-center gap-1 text-xs text-indigo-600 hover:underline"
+                              className="flex items-center gap-1 text-xs text-accent-500 hover:underline"
                             >
                               Ver resultados <ChevronRight className="h-3.5 w-3.5" />
                             </Link>
@@ -236,7 +236,7 @@ export default function AtividadesPage() {
                       <div className="flex justify-center mt-4">
                         <button
                           onClick={() => setShowCount((n) => n + 20)}
-                          className="px-5 py-2 text-sm text-indigo-600 border border-indigo-200 rounded-xl hover:bg-indigo-50"
+                          className="px-5 py-2 text-sm text-accent-500 border border-accent-200 rounded-xl hover:bg-accent-50"
                         >
                           Mostrar mais ({filtered.length - showCount} restantes)
                         </button>
@@ -260,7 +260,7 @@ export default function AtividadesPage() {
             <select
               value={form.turma_id}
               onChange={(e) => setForm({ ...form, turma_id: e.target.value })}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-accent-500 outline-none"
             >
               <option value="">Selecione uma turma</option>
               {turmas.map((t) => (
@@ -274,7 +274,7 @@ export default function AtividadesPage() {
               value={form.nome}
               onChange={(e) => setForm({ ...form, nome: e.target.value })}
               placeholder="Ex: Prova Bimestral — Álgebra"
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-accent-500 outline-none"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -303,7 +303,7 @@ export default function AtividadesPage() {
               onChange={(e) => setForm({ ...form, gabarito_texto: e.target.value })}
               placeholder="Gabarito geral da atividade..."
               rows={3}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-accent-500 outline-none resize-none"
             />
           </div>
 
@@ -331,7 +331,7 @@ export default function AtividadesPage() {
                   {importing ? 'Extraindo...' : 'Importar do PDF'}
                 </button>
                 <span className="text-gray-300 text-xs">|</span>
-                <button type="button" onClick={addQuestao} className="text-xs text-indigo-600 hover:underline">
+                <button type="button" onClick={addQuestao} className="text-xs text-accent-500 hover:underline">
                   + Adicionar
                 </button>
               </div>
@@ -353,14 +353,14 @@ export default function AtividadesPage() {
                     value={q.enunciado}
                     onChange={(e) => updateQuestao(idx, 'enunciado', e.target.value)}
                     placeholder="Enunciado da questão"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-1 focus:ring-indigo-400"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-1 focus:ring-accent-400"
                   />
                   <div className="grid grid-cols-2 gap-2">
                     <input
                       value={q.gabarito}
                       onChange={(e) => updateQuestao(idx, 'gabarito', e.target.value)}
                       placeholder="Gabarito (opcional)"
-                      className="px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-1 focus:ring-indigo-400"
+                      className="px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-1 focus:ring-accent-400"
                     />
                     <input
                       type="number"
@@ -369,7 +369,7 @@ export default function AtividadesPage() {
                       step={0.5}
                       onChange={(e) => updateQuestao(idx, 'peso', parseFloat(e.target.value))}
                       placeholder="Peso"
-                      className="px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-1 focus:ring-indigo-400"
+                      className="px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-1 focus:ring-accent-400"
                     />
                   </div>
                 </div>
@@ -383,7 +383,7 @@ export default function AtividadesPage() {
               Cancelar
             </button>
             <button type="submit" disabled={createMutation.isPending}
-              className="flex-1 bg-indigo-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2">
+              className="flex-1 bg-accent-500 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-accent-600 disabled:opacity-50 flex items-center justify-center gap-2">
               {createMutation.isPending && <Spinner size="sm" />}
               Criar Atividade
             </button>

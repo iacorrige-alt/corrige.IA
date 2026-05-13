@@ -14,7 +14,7 @@ export default function AgenteFlutuante() {
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 z-40 w-14 h-14 bg-gradient-to-br from-indigo-600 to-violet-600 text-white rounded-full shadow-xl hover:shadow-indigo-300 hover:scale-105 flex items-center justify-center transition-all"
+          className="fixed bottom-6 right-6 z-40 w-14 h-14 bg-gradient-to-br from-brand-600 to-brick-500 text-white rounded-full shadow-xl hover:shadow-brick-500/40 hover:scale-105 flex items-center justify-center transition-all"
           title="Agente IA — Beta"
         >
           <Bot className="h-6 w-6" />
@@ -30,7 +30,7 @@ export default function AgenteFlutuante() {
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-white flex-shrink-0">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-xl flex items-center justify-center shadow-sm">
+              <div className="w-8 h-8 bg-gradient-to-br from-brand-600 to-brick-500 rounded-xl flex items-center justify-center shadow-sm">
                 <Bot className="h-4 w-4 text-white" />
               </div>
               <div>
@@ -45,7 +45,7 @@ export default function AgenteFlutuante() {
               <Link
                 to="/agente"
                 onClick={() => setIsOpen(false)}
-                className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                className="p-1.5 text-gray-400 hover:text-accent-500 hover:bg-accent-50 rounded-lg transition-colors"
                 title="Abrir em tela cheia"
               >
                 <Maximize2 className="h-4 w-4" />

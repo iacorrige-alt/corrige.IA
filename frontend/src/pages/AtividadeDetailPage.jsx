@@ -51,7 +51,7 @@ function RespostaRow({ r, atividadeId, onSaved }) {
           )}
           {r.comentario_ia && (
             <div className="flex items-start gap-2">
-              <Brain className="h-4 w-4 text-indigo-400 mt-0.5 flex-shrink-0" />
+              <Brain className="h-4 w-4 text-accent-400 mt-0.5 flex-shrink-0" />
               <p className="text-sm text-gray-500 break-words">{r.comentario_ia}</p>
             </div>
           )}
@@ -65,7 +65,7 @@ function RespostaRow({ r, atividadeId, onSaved }) {
                 type="number" min="0" step="0.1"
                 value={notaInput}
                 onChange={(e) => setNotaInput(e.target.value)}
-                className="w-16 text-sm border border-indigo-300 rounded-lg px-2 py-0.5 outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-16 text-sm border border-accent-300 rounded-lg px-2 py-0.5 outline-none focus:ring-2 focus:ring-accent-500"
                 autoFocus
                 onKeyDown={(e) => { if (e.key === 'Enter') confirmEdit(); if (e.key === 'Escape') setEditing(false) }}
               />
@@ -81,7 +81,7 @@ function RespostaRow({ r, atividadeId, onSaved }) {
             <>
               <span className="text-sm font-semibold text-gray-700">{r.nota ?? '—'}</span>
               <button onClick={startEdit} title="Editar nota"
-                className="p-1 text-gray-300 hover:text-indigo-500 hover:bg-indigo-50 rounded-lg">
+                className="p-1 text-gray-300 hover:text-accent-500 hover:bg-accent-50 rounded-lg">
                 <Pencil className="h-3 w-3" />
               </button>
             </>
@@ -105,7 +105,7 @@ function ResultadoCard({ resultado, atividadeId }) {
         onClick={() => setOpen(!open)}
       >
         <div className="flex items-center gap-3 min-w-0 flex-1">
-          <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-semibold text-sm flex-shrink-0">
+          <div className="w-9 h-9 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 font-semibold text-sm flex-shrink-0">
             {resultado.aluno_initials || '?'}
           </div>
           <div className="min-w-0">
@@ -130,7 +130,7 @@ function ResultadoCard({ resultado, atividadeId }) {
               {provas.map((p, i) => (
                 p.signed_url ? (
                   <a key={p.id} href={p.signed_url} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-800 border border-indigo-200 bg-white px-2.5 py-1.5 rounded-lg hover:bg-indigo-50 transition-colors">
+                    className="flex items-center gap-1.5 text-xs text-accent-500 hover:text-accent-700 border border-accent-200 bg-white px-2.5 py-1.5 rounded-lg hover:bg-accent-50 transition-colors">
                     <ExternalLink className="h-3 w-3" />
                     Ver prova {provas.length > 1 ? i + 1 : ''}
                   </a>
@@ -395,12 +395,12 @@ export default function AtividadeDetailPage() {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-6 mb-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <ListChecks className="h-5 w-5 text-indigo-500" />
+              <ListChecks className="h-5 w-5 text-accent-500" />
               <h2 className="font-semibold text-gray-900">Questões ({(atividade.questoes || []).length})</h2>
             </div>
             <button
               onClick={() => { setAddQuestaoModal(true); setQuestaoError('') }}
-              className="flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-800 px-3 py-1.5 rounded-lg hover:bg-indigo-50"
+              className="flex items-center gap-1.5 text-sm text-accent-500 hover:text-accent-700 px-3 py-1.5 rounded-lg hover:bg-accent-50"
             >
               <Plus className="h-4 w-4" /> Questão
             </button>
@@ -423,14 +423,14 @@ export default function AtividadeDetailPage() {
                       <textarea
                         value={editQuestao.enunciado}
                         onChange={(e) => setEditQuestao({ ...editQuestao, enunciado: e.target.value })}
-                        className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                        className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-accent-500 resize-none"
                         rows={2}
                         placeholder="Enunciado"
                       />
                       <input
                         value={editQuestao.gabarito}
                         onChange={(e) => setEditQuestao({ ...editQuestao, gabarito: e.target.value })}
-                        className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-accent-500"
                         placeholder="Gabarito (opcional)"
                       />
                       <div className="flex gap-2 items-center">
@@ -463,7 +463,7 @@ export default function AtividadeDetailPage() {
                       </div>
                       <div className="flex gap-1 flex-shrink-0">
                         <button onClick={() => startEditQuestao(q)}
-                          className="p-1.5 text-gray-300 hover:text-indigo-500 hover:bg-indigo-50 rounded-lg">
+                          className="p-1.5 text-gray-300 hover:text-accent-500 hover:bg-accent-50 rounded-lg">
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
                         <button onClick={() => { if (confirm('Excluir questão?')) deleteQuestaoMutation.mutate(q.id) }}
@@ -483,7 +483,7 @@ export default function AtividadeDetailPage() {
       {/* Gabarito PDF */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-6 mb-4">
         <div className="flex items-center gap-2 mb-1">
-          <FileText className="h-5 w-5 text-indigo-500" />
+          <FileText className="h-5 w-5 text-accent-500" />
           <h2 className="font-semibold text-gray-900">Gabarito Oficial</h2>
         </div>
         <p className="text-sm text-gray-500 mb-4">
@@ -541,7 +541,7 @@ export default function AtividadeDetailPage() {
             <button
               onClick={() => gabaritoRef.current?.click()}
               disabled={gabaritoUploading}
-              className="flex items-center gap-2 px-5 py-2.5 border-2 border-dashed border-gray-300 text-gray-600 rounded-xl font-medium hover:border-indigo-400 hover:text-indigo-600 transition-colors w-full sm:w-auto justify-center disabled:opacity-50"
+              className="flex items-center gap-2 px-5 py-2.5 border-2 border-dashed border-gray-300 text-gray-600 rounded-xl font-medium hover:border-accent-400 hover:text-accent-500 transition-colors w-full sm:w-auto justify-center disabled:opacity-50"
             >
               {gabaritoUploading ? <Spinner size="sm" /> : <FileText className="h-5 w-5" />}
               {gabaritoUploading ? 'Enviando gabarito...' : 'Enviar Gabarito (PDF ou imagem)'}
@@ -564,7 +564,7 @@ export default function AtividadeDetailPage() {
             Correção com gabarito oficial
           </div>
         ) : (
-          <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-purple-50 border border-purple-200 rounded-xl text-sm text-purple-800 w-fit">
+          <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-brick-50 border border-brick-100 rounded-xl text-sm text-brick-600 w-fit">
             <Sparkles className="h-4 w-4 text-purple-500 flex-shrink-0" />
             Agente IA autônomo — gera critérios e corrige sem gabarito
           </div>
@@ -589,7 +589,7 @@ export default function AtividadeDetailPage() {
           <button
             onClick={() => fileRef.current?.click()}
             disabled={uploading}
-            className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-5 py-2.5 bg-accent-500 text-white rounded-xl font-medium hover:bg-accent-600 transition-colors disabled:opacity-50"
           >
             {uploading ? <Spinner size="sm" /> : <Upload className="h-5 w-5" />}
             {uploading ? 'Enviando...' : 'Selecionar Arquivos'}
@@ -636,7 +636,7 @@ export default function AtividadeDetailPage() {
                         </span>
                         {u.signed_url && (
                           <a href={u.signed_url} target="_blank" rel="noopener noreferrer"
-                            className="text-xs text-indigo-600 hover:underline flex-shrink-0 flex items-center gap-1">
+                            className="text-xs text-accent-500 hover:underline flex-shrink-0 flex items-center gap-1">
                             <ExternalLink className="h-3 w-3" /> Abrir
                           </a>
                         )}
@@ -670,7 +670,7 @@ export default function AtividadeDetailPage() {
                               qc.invalidateQueries({ queryKey: ['resultados', id] })
                             } finally { setSavingAlunoUploadId(null) }
                           }}
-                          className="flex-1 min-w-0 text-xs border border-gray-300 rounded-lg px-2 py-1.5 outline-none focus:ring-2 focus:ring-indigo-500 bg-white disabled:opacity-50"
+                          className="flex-1 min-w-0 text-xs border border-gray-300 rounded-lg px-2 py-1.5 outline-none focus:ring-2 focus:ring-accent-500 bg-white disabled:opacity-50"
                         >
                           <option value="">— Selecionar aluno —</option>
                           {alunos.map((a) => (
@@ -695,7 +695,7 @@ export default function AtividadeDetailPage() {
                                 setCorrendo(null)
                               }
                             }}
-                            className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex-shrink-0"
+                            className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 bg-accent-500 text-white rounded-lg hover:bg-accent-600 disabled:opacity-50 flex-shrink-0"
                           >
                             {correndo === u.id ? <Spinner size="sm" /> : <Brain className="h-3 w-3" />}
                             {correndo === u.id ? 'Corrigindo...' : 'Corrigir'}
@@ -753,7 +753,7 @@ export default function AtividadeDetailPage() {
               value={newQuestao.enunciado}
               onChange={(e) => setNewQuestao({ ...newQuestao, enunciado: e.target.value })}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+              className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm outline-none focus:ring-2 focus:ring-accent-500 resize-none"
               placeholder="Digite o enunciado da questão"
             />
           </div>
@@ -762,7 +762,7 @@ export default function AtividadeDetailPage() {
             <input
               value={newQuestao.gabarito}
               onChange={(e) => setNewQuestao({ ...newQuestao, gabarito: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm outline-none focus:ring-2 focus:ring-accent-500"
               placeholder="Resposta esperada"
             />
           </div>
@@ -806,7 +806,7 @@ export default function AtividadeDetailPage() {
                 })
               }}
               disabled={addQuestaoMutation.isPending}
-              className="flex-1 bg-indigo-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2"
+              className="flex-1 bg-accent-500 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-accent-600 disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {addQuestaoMutation.isPending && <Spinner size="sm" />}
               Adicionar

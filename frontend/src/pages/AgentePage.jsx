@@ -9,7 +9,7 @@ export default function AgentePage() {
     <div className="flex flex-col h-full max-h-screen">
       {/* Header */}
       <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100 bg-white">
-        <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0">
+        <div className="w-10 h-10 bg-gradient-to-br from-brand-600 to-brick-500 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0">
           <Bot className="h-5 w-5 text-white" />
         </div>
         <div className="flex-1 min-w-0">
@@ -24,7 +24,7 @@ export default function AgentePage() {
             Análise de turmas · Criação de provas · Diagnóstico pedagógico — powered by GPT-4o
           </p>
         </div>
-        <Sparkles className="h-4 w-4 text-violet-400 flex-shrink-0 hidden sm:block" />
+        <Sparkles className="h-4 w-4 text-brick-400 flex-shrink-0 hidden sm:block" />
       </div>
 
       <ChatInterface {...agente} fullPage />

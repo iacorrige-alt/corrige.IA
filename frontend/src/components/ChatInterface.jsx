@@ -13,7 +13,7 @@ function inlineMarkdown(text) {
     const m = match[0]
     if (m.startsWith('**')) parts.push(<strong key={key++}>{m.slice(2, -2)}</strong>)
     else if (m.startsWith('*')) parts.push(<em key={key++}>{m.slice(1, -1)}</em>)
-    else parts.push(<code key={key++} className="bg-gray-100 text-indigo-700 px-1 py-0.5 rounded text-xs font-mono">{m.slice(1, -1)}</code>)
+    else parts.push(<code key={key++} className="bg-gray-100 text-brand-600 px-1 py-0.5 rounded text-xs font-mono">{m.slice(1, -1)}</code>)
     last = match.index + m.length
   }
   if (last < text.length) parts.push(text.slice(last))
@@ -103,14 +103,14 @@ function MessageBubble({ msg }) {
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3`}>
       {!isUser && (
-        <div className="w-7 h-7 bg-indigo-100 rounded-full flex items-center justify-center mr-2 flex-shrink-0 mt-0.5">
-          <span className="text-indigo-600 text-xs font-bold">IA</span>
+        <div className="w-7 h-7 bg-brand-50 rounded-full flex items-center justify-center mr-2 flex-shrink-0 mt-0.5">
+          <span className="text-brand-600 text-xs font-bold">IA</span>
         </div>
       )}
       <div
         className={`max-w-[82%] rounded-2xl px-4 py-2.5 ${
           isUser
-            ? 'bg-indigo-600 text-white rounded-tr-sm'
+            ? 'bg-accent-500 text-white rounded-tr-sm'
             : 'bg-white border border-gray-100 shadow-sm text-gray-800 rounded-tl-sm'
         }`}
       >
@@ -120,7 +120,7 @@ function MessageBubble({ msg }) {
         {isUser ? (
           <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
         ) : msg.streaming ? (
-          <p className="text-sm whitespace-pre-wrap">{msg.content}<span className="inline-block w-1.5 h-3.5 bg-indigo-500 ml-0.5 animate-pulse rounded-sm" /></p>
+          <p className="text-sm whitespace-pre-wrap">{msg.content}<span className="inline-block w-1.5 h-3.5 bg-accent-500 ml-0.5 animate-pulse rounded-sm" /></p>
         ) : (
           <MarkdownContent text={msg.content} />
         )}
@@ -185,11 +185,11 @@ export default function ChatInterface({ messages, streaming, activeTools, sendMe
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1 min-h-0">
         {isEmpty && (
           <div className="flex flex-col items-center justify-center h-full text-center py-8 px-2">
-            <span className="inline-flex items-center gap-1.5 bg-indigo-50 text-indigo-600 text-xs font-semibold px-3 py-1 rounded-full border border-indigo-100 mb-5">
-              <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse" />
+            <span className="inline-flex items-center gap-1.5 bg-brand-50 text-brand-600 text-xs font-semibold px-3 py-1 rounded-full border border-brand-100 mb-5">
+              <span className="w-1.5 h-1.5 bg-accent-500 rounded-full animate-pulse" />
               Beta — acesso antecipado gratuito
             </span>
-            <div className="w-14 h-14 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-indigo-200">
+            <div className="w-14 h-14 bg-gradient-to-br from-brand-600 to-brick-500 rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-brand-600/20">
               <span className="text-2xl">🎓</span>
             </div>
             <p className="text-gray-900 font-bold text-sm mb-1.5">Seu assistente pedagógico com IA</p>
@@ -219,7 +219,7 @@ export default function ChatInterface({ messages, streaming, activeTools, sendMe
                 <button
                   key={s}
                   onClick={() => { setInput(s); textareaRef.current?.focus() }}
-                  className="text-xs text-left w-full px-3 py-2.5 bg-white hover:bg-indigo-50 hover:text-indigo-700 rounded-xl border border-gray-200 hover:border-indigo-200 transition-colors"
+                  className="text-xs text-left w-full px-3 py-2.5 bg-white hover:bg-accent-50 hover:text-accent-600 rounded-xl border border-gray-200 hover:border-accent-200 transition-colors"
                 >
                   {s}
                 </button>
@@ -232,7 +232,7 @@ export default function ChatInterface({ messages, streaming, activeTools, sendMe
 
         {activeTools.length > 0 && (
           <div className="flex items-center gap-2 px-2 py-1">
-            <Database className="h-3.5 w-3.5 text-indigo-400 animate-pulse" />
+            <Database className="h-3.5 w-3.5 text-accent-400 animate-pulse" />
             <span className="text-xs text-gray-400">
               {TOOL_LABELS[activeTools[0]] || 'Buscando dados'}…
             </span>
@@ -258,7 +258,7 @@ export default function ChatInterface({ messages, streaming, activeTools, sendMe
         <div className="flex items-end gap-2">
           <button
             onClick={() => fileRef.current?.click()}
-            className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors flex-shrink-0"
+            className="p-2 text-gray-400 hover:text-accent-500 hover:bg-accent-50 rounded-xl transition-colors flex-shrink-0"
             title="Anexar imagem"
           >
             <Paperclip className="h-4 w-4" />
@@ -272,7 +272,7 @@ export default function ChatInterface({ messages, streaming, activeTools, sendMe
             onKeyDown={handleKeyDown}
             placeholder="Pergunte algo ou envie uma imagem…"
             rows={1}
-            className="flex-1 resize-none bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none leading-relaxed overflow-y-auto"
+            className="flex-1 resize-none bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-accent-500 focus:border-accent-500 outline-none leading-relaxed overflow-y-auto"
             style={{ minHeight: '42px', maxHeight: '128px' }}
             disabled={streaming}
           />
@@ -290,7 +290,7 @@ export default function ChatInterface({ messages, streaming, activeTools, sendMe
           <button
             onClick={handleSend}
             disabled={streaming || (!input.trim() && !image)}
-            className="p-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 flex-shrink-0 transition-colors"
+            className="p-2.5 bg-accent-500 text-white rounded-xl hover:bg-accent-600 disabled:opacity-50 flex-shrink-0 transition-colors"
           >
             {streaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </button>

@@ -32,7 +32,7 @@ const PACOTES = [
 
 function UsageBar({ label, usado, limite }) {
   const pct = limite > 0 ? Math.min(((usado ?? 0) / limite) * 100, 100) : 0
-  const cor = pct >= 100 ? 'bg-red-500' : pct >= 80 ? 'bg-yellow-500' : 'bg-indigo-500'
+  const cor = pct >= 100 ? 'bg-red-500' : pct >= 80 ? 'bg-yellow-500' : 'bg-accent-500'
   return (
     <div>
       <div className="flex justify-between text-xs text-gray-500 mb-1">
@@ -107,7 +107,7 @@ export default function UpgradeModal({ professor, onClose }) {
               disabled={!!loadingPacote}
               className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-medium transition-colors disabled:opacity-60 ${
                 destaque
-                  ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700'
+                  ? 'bg-accent-500 text-white border-accent-500 hover:bg-accent-600'
                   : 'bg-white text-gray-800 border-gray-200 hover:bg-gray-50'
               }`}
             >
@@ -119,13 +119,13 @@ export default function UpgradeModal({ professor, onClose }) {
                 )}
                 {nome}
                 {destaque && (
-                  <span className={`text-xs px-1.5 py-0.5 rounded-full ${destaque ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-600'}`}>
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full ${destaque ? 'bg-white/20 text-white' : 'bg-accent-50 text-accent-600'}`}>
                     Popular
                   </span>
                 )}
               </span>
               <span className="flex items-center gap-3">
-                <span className={`text-xs ${destaque ? 'text-indigo-100' : 'text-gray-400'}`}>
+                <span className={`text-xs ${destaque ? 'text-white/80' : 'text-gray-400'}`}>
                   {tokens} tokens
                 </span>
                 <span>{preco}</span>
