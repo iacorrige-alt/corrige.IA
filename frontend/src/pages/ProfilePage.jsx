@@ -1,9 +1,15 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { User, Lock, Zap, CheckCircle, AlertTriangle, Crown, XCircle } from 'lucide-react'
+import { User, Lock, Zap, CheckCircle, AlertTriangle, Crown, Star, Rocket } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../hooks/useAuth'
 import Spinner from '../components/Spinner'
+
+const PACOTES = [
+  { id: 'starter', nome: 'Starter', icon: Star,   preco: 'R$ 99',  tokens: '5M',  destaque: false },
+  { id: 'regular', nome: 'Regular', icon: Crown,   preco: 'R$ 159', tokens: '8M',  destaque: true  },
+  { id: 'pro',     nome: 'Pro',     icon: Rocket,  preco: 'R$ 239', tokens: '12M', destaque: false },
+]
 
 function Section({ icon: Icon, title, children }) {
   return (
@@ -40,37 +46,23 @@ export default function ProfilePage() {
   const plano = professor?.plano ?? 'free_trial'
   const inputUsado = professor?.input_tokens_usados ?? 0
   const outputUsado = professor?.output_tokens_usados ?? 0
-  const inputLimite = professor?.input_tokens_limite ?? 5000000
-  const outputLimite = professor?.output_tokens_limite ?? 5000000
+  const inputLimite = professor?.input_tokens_limite ?? 2000000
+  const outputLimite = professor?.output_tokens_limite ?? 2000000
   const pctInput = inputLimite > 0 ? Math.min((inputUsado / inputLimite) * 100, 100) : 0
   const pctOutput = outputLimite > 0 ? Math.min((outputUsado / outputLimite) * 100, 100) : 0
   const corInput = pctInput >= 100 ? 'bg-red-500' : pctInput >= 80 ? 'bg-yellow-500' : 'bg-indigo-500'
   const corOutput = pctOutput >= 100 ? 'bg-red-500' : pctOutput >= 80 ? 'bg-yellow-500' : 'bg-indigo-500'
 
-  const [assinandoLoading, setAssinandoLoading] = useState(false)
-  const [cancelandoLoading, setCancelandoLoading] = useState(false)
+  const [loadingPacote, setLoadingPacote] = useState(null)
 
-  async function handleAssinar() {
-    setAssinandoLoading(true)
+  async function handleRecarregar(pacoteId) {
+    setLoadingPacote(pacoteId)
     try {
-      const { url } = await api.pagamento.criarCheckout()
+      const { url } = await api.pagamento.criarCheckout(pacoteId)
       window.location.href = url
     } catch (err) {
       alert(err.message || 'Erro ao iniciar pagamento.')
-      setAssinandoLoading(false)
-    }
-  }
-
-  async function handleCancelar() {
-    if (!confirm('Tem certeza que deseja cancelar sua assinatura? Seu plano voltará para o gratuito.')) return
-    setCancelandoLoading(true)
-    try {
-      await api.pagamento.cancelar()
-      qc.invalidateQueries({ queryKey: ['me'] })
-    } catch (err) {
-      alert(err.message || 'Erro ao cancelar assinatura.')
-    } finally {
-      setCancelandoLoading(false)
+      setLoadingPacote(null)
     }
   }
 
@@ -167,64 +159,68 @@ export default function ProfilePage() {
             <div className="flex justify-center py-4"><Spinner /></div>
           ) : (
             <div className="space-y-4">
-              {/* Badge do plano */}
+              {/* Status da conta */}
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Plano atual</span>
-                {plano === 'pago' ? (
-                  <span className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 bg-amber-100 text-amber-700 rounded-full">
-                    <Crown className="h-3 w-3" /> Pago
-                  </span>
-                ) : plano === 'bloqueado' ? (
-                  <span className="text-xs font-semibold px-2.5 py-1 bg-red-100 text-red-700 rounded-full">Bloqueado</span>
+                <span className="text-sm text-gray-600">Status</span>
+                {plano === 'bloqueado' ? (
+                  <span className="text-xs font-semibold px-2.5 py-1 bg-red-100 text-red-700 rounded-full">Tokens esgotados</span>
                 ) : (
-                  <span className="text-xs font-semibold px-2.5 py-1 bg-gray-100 text-gray-600 rounded-full">Gratuito</span>
+                  <span className="text-xs font-semibold px-2.5 py-1 bg-green-100 text-green-700 rounded-full">Ativo</span>
                 )}
               </div>
 
-              {/* Barras de uso (só para free_trial / bloqueado) */}
-              {plano !== 'pago' && (
-                <div className="space-y-3">
-                  <div>
-                    <div className="flex justify-between text-xs text-gray-500 mb-1">
-                      <span>Tokens de entrada</span>
-                      <span>{inputUsado.toLocaleString('pt-BR')} / {inputLimite.toLocaleString('pt-BR')}</span>
-                    </div>
-                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full transition-all ${corInput}`} style={{ width: `${pctInput}%` }} />
-                    </div>
+              {/* Barras de uso */}
+              <div className="space-y-3">
+                <div>
+                  <div className="flex justify-between text-xs text-gray-500 mb-1">
+                    <span>Tokens de entrada</span>
+                    <span>{inputUsado.toLocaleString('pt-BR')} / {inputLimite.toLocaleString('pt-BR')}</span>
                   </div>
-                  <div>
-                    <div className="flex justify-between text-xs text-gray-500 mb-1">
-                      <span>Tokens de saída</span>
-                      <span>{outputUsado.toLocaleString('pt-BR')} / {outputLimite.toLocaleString('pt-BR')}</span>
-                    </div>
-                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full transition-all ${corOutput}`} style={{ width: `${pctOutput}%` }} />
-                    </div>
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full transition-all ${corInput}`} style={{ width: `${pctInput}%` }} />
                   </div>
                 </div>
-              )}
+                <div>
+                  <div className="flex justify-between text-xs text-gray-500 mb-1">
+                    <span>Tokens de saída</span>
+                    <span>{outputUsado.toLocaleString('pt-BR')} / {outputLimite.toLocaleString('pt-BR')}</span>
+                  </div>
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full transition-all ${corOutput}`} style={{ width: `${pctOutput}%` }} />
+                  </div>
+                </div>
+              </div>
 
-              {/* Ações de assinatura */}
-              {plano === 'pago' ? (
-                <button
-                  onClick={handleCancelar}
-                  disabled={cancelandoLoading}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 text-sm border border-red-200 text-red-600 rounded-xl hover:bg-red-50 disabled:opacity-50"
-                >
-                  {cancelandoLoading ? <Spinner size="sm" /> : <XCircle className="h-4 w-4" />}
-                  {cancelandoLoading ? 'Cancelando...' : 'Cancelar assinatura'}
-                </button>
-              ) : (
-                <button
-                  onClick={handleAssinar}
-                  disabled={assinandoLoading}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 text-sm bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 disabled:opacity-50"
-                >
-                  {assinandoLoading ? <Spinner size="sm" /> : <Crown className="h-4 w-4" />}
-                  {assinandoLoading ? 'Redirecionando...' : 'Assinar plano pago'}
-                </button>
-              )}
+              {/* Recargas de tokens */}
+              <div className="pt-1">
+                <p className="text-xs text-gray-500 mb-2">Recarregar tokens via PIX</p>
+                <div className="space-y-2">
+                  {PACOTES.map(({ id, nome, icon: Icon, preco, tokens, destaque }) => (
+                    <button
+                      key={id}
+                      onClick={() => handleRecarregar(id)}
+                      disabled={!!loadingPacote}
+                      className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors disabled:opacity-60 ${
+                        destaque
+                          ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700'
+                          : 'bg-white text-gray-800 border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        {loadingPacote === id ? <Spinner size="sm" /> : <Icon className="h-4 w-4" />}
+                        {nome}
+                        {destaque && (
+                          <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/20 text-white">Popular</span>
+                        )}
+                      </span>
+                      <span className="flex items-center gap-3">
+                        <span className={`text-xs ${destaque ? 'text-indigo-100' : 'text-gray-400'}`}>{tokens} tokens</span>
+                        <span>{preco}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </Section>

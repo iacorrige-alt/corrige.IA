@@ -55,8 +55,8 @@ class ProfessorOut(BaseModel):
     plano: str = "free_trial"
     input_tokens_usados: int = 0
     output_tokens_usados: int = 0
-    input_tokens_limite: int = 3000000
-    output_tokens_limite: int = 3000000
+    input_tokens_limite: int = 2000000
+    output_tokens_limite: int = 2000000
     abacatepay_customer_id: Optional[str] = None
     # campos legados mantidos para retrocompatibilidade
     tokens_usados: int = 0

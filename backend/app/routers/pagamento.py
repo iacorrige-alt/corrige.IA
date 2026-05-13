@@ -1,11 +1,13 @@
-"""Endpoints de pagamento via AbacatePay: checkout e cancelamento."""
+"""Endpoints de pagamento via AbacatePay: recargas de tokens avulsas."""
 import asyncio
 import logging
+from typing import Literal
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
-from app.config import settings
+from app.config import PACOTES_TOKENS, PACOTES_PRECO_CENTAVOS, settings
 from app.db.supabase_client import get_supabase
 from app.dependencies import get_current_user
 
@@ -13,6 +15,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/pagamento", tags=["pagamento"])
 
 _ABACATE_URL = "https://api.abacatepay.com/v2"
+
+
+class CheckoutRequest(BaseModel):
+    pacote: Literal["starter", "regular", "pro"]
 
 
 def _headers() -> dict:
@@ -25,20 +31,25 @@ def _headers() -> dict:
 
 
 @router.post("/checkout")
-async def criar_checkout(current_user: dict = Depends(get_current_user)):
-    """Cria um billing no AbacatePay e retorna a URL de pagamento."""
+async def criar_checkout(
+    body: CheckoutRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Cria um checkout no AbacatePay para o pacote de recarga escolhido."""
     supabase = get_supabase()
     prof = await asyncio.to_thread(
         supabase.table("professores")
-        .select("nome, email, plano")
+        .select("nome, email")
         .eq("id", current_user["id"])
         .single()
         .execute
     )
     if not prof.data:
         raise HTTPException(status_code=404, detail="Professor não encontrado.")
-    if prof.data.get("plano") == "pago":
-        raise HTTPException(status_code=400, detail="Conta já possui plano ativo.")
+
+    produto_id = settings.produto_id(body.pacote)
+    # externalId codifica professor_id + pacote para o webhook identificar a recarga
+    external_id = f"{current_user['id']}:{body.pacote}"
 
     headers = _headers()
     async with httpx.AsyncClient(timeout=30) as client:
@@ -46,10 +57,10 @@ async def criar_checkout(current_user: dict = Depends(get_current_user)):
             f"{_ABACATE_URL}/checkouts/create",
             headers=headers,
             json={
-                "items": [{"id": settings.abacatepay_product_id, "quantity": 1}],
+                "items": [{"id": produto_id, "quantity": 1}],
                 "returnUrl": f"{settings.frontend_url}/perfil?cancelado=true",
                 "completionUrl": f"{settings.frontend_url}/perfil?sucesso=true",
-                "externalId": current_user["id"],
+                "externalId": external_id,
                 "customer": {
                     "name": prof.data.get("nome", ""),
                     "email": prof.data.get("email", ""),
@@ -67,46 +78,9 @@ async def criar_checkout(current_user: dict = Depends(get_current_user)):
         logger.error("AbacatePay retornou sem URL: %s", payload)
         raise HTTPException(status_code=502, detail="URL de pagamento não retornada.")
 
+    input_t, output_t = PACOTES_TOKENS[body.pacote]
+    logger.info(
+        "Checkout criado: professor=%s pacote=%s tokens=%dM+%dM",
+        current_user["id"], body.pacote, input_t // 1_000_000, output_t // 1_000_000,
+    )
     return {"url": url}
-
-
-@router.post("/cancelar")
-async def cancelar_assinatura(current_user: dict = Depends(get_current_user)):
-    """Cancela a assinatura ativa do professor no AbacatePay."""
-    supabase = get_supabase()
-    prof = await asyncio.to_thread(
-        supabase.table("professores")
-        .select("plano, abacatepay_subscription_id")
-        .eq("id", current_user["id"])
-        .single()
-        .execute
-    )
-    if not prof.data:
-        raise HTTPException(status_code=404, detail="Professor não encontrado.")
-    if prof.data.get("plano") != "pago":
-        raise HTTPException(status_code=400, detail="Nenhuma assinatura ativa para cancelar.")
-
-    sub_id = prof.data.get("abacatepay_subscription_id")
-    if sub_id:
-        headers = _headers()
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
-                f"{_ABACATE_URL}/subscriptions/cancel",
-                headers=headers,
-                params={"id": sub_id},
-            )
-        if resp.status_code not in (200, 201, 204):
-            logger.warning(
-                "AbacatePay cancel error %d para sub %s: %s",
-                resp.status_code, sub_id, resp.text,
-            )
-
-    # Atualiza o plano localmente independente do resultado da API
-    await asyncio.to_thread(
-        supabase.table("professores").update({
-            "plano": "free_trial",
-            "abacatepay_subscription_id": None,
-        }).eq("id", current_user["id"]).execute
-    )
-    logger.info("Assinatura cancelada pelo professor %s", current_user["id"])
-    return {"message": "Assinatura cancelada com sucesso."}

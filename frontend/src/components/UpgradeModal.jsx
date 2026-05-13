@@ -1,7 +1,34 @@
 import { useState } from 'react'
-import { Zap, X, Crown, AlertTriangle } from 'lucide-react'
+import { Zap, X, Crown, Star, Rocket } from 'lucide-react'
 import { api } from '../lib/api'
 import Spinner from './Spinner'
+
+const PACOTES = [
+  {
+    id: 'starter',
+    nome: 'Starter',
+    icon: Star,
+    preco: 'R$ 99',
+    tokens: '5M',
+    destaque: false,
+  },
+  {
+    id: 'regular',
+    nome: 'Regular',
+    icon: Crown,
+    preco: 'R$ 159',
+    tokens: '8M',
+    destaque: true,
+  },
+  {
+    id: 'pro',
+    nome: 'Pro',
+    icon: Rocket,
+    preco: 'R$ 239',
+    tokens: '12M',
+    destaque: false,
+  },
+]
 
 function UsageBar({ label, usado, limite }) {
   const pct = limite > 0 ? Math.min(((usado ?? 0) / limite) * 100, 100) : 0
@@ -20,16 +47,16 @@ function UsageBar({ label, usado, limite }) {
 }
 
 export default function UpgradeModal({ professor, onClose }) {
-  const [loading, setLoading] = useState(false)
+  const [loadingPacote, setLoadingPacote] = useState(null)
 
-  async function handleAssinar() {
-    setLoading(true)
+  async function handleComprar(pacoteId) {
+    setLoadingPacote(pacoteId)
     try {
-      const { url } = await api.pagamento.criarCheckout()
+      const { url } = await api.pagamento.criarCheckout(pacoteId)
       window.location.href = url
     } catch (err) {
       alert(err.message || 'Erro ao iniciar pagamento.')
-      setLoading(false)
+      setLoadingPacote(null)
     }
   }
 
@@ -49,14 +76,9 @@ export default function UpgradeModal({ professor, onClose }) {
           </div>
           <div>
             <h2 className="font-bold text-gray-900">Cota de tokens esgotada</h2>
-            <p className="text-xs text-gray-500">Plano gratuito</p>
+            <p className="text-xs text-gray-500">Recarregue para continuar corrigindo</p>
           </div>
         </div>
-
-        <p className="text-sm text-gray-600 mb-4">
-          Você utilizou todos os tokens do plano gratuito.
-          Assine o plano mensal para continuar corrigindo provas sem limites.
-        </p>
 
         {professor && (
           <div className="bg-gray-50 rounded-xl p-4 space-y-3 mb-5">
@@ -73,30 +95,51 @@ export default function UpgradeModal({ professor, onClose }) {
           </div>
         )}
 
-        <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 mb-4 flex items-start gap-2">
-          <AlertTriangle className="h-4 w-4 text-indigo-500 mt-0.5 flex-shrink-0" />
-          <p className="text-xs text-indigo-700">
-            O pagamento é feito via <strong>PIX</strong> de forma segura pelo AbacatePay.
-            Você será redirecionado para a página de pagamento.
-          </p>
+        <p className="text-sm text-gray-600 mb-4">
+          Escolha um pacote de recarga. O pagamento é feito via <strong>PIX</strong> de forma segura pelo AbacatePay.
+        </p>
+
+        <div className="space-y-2 mb-4">
+          {PACOTES.map(({ id, nome, icon: Icon, preco, tokens, destaque }) => (
+            <button
+              key={id}
+              onClick={() => handleComprar(id)}
+              disabled={!!loadingPacote}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-medium transition-colors disabled:opacity-60 ${
+                destaque
+                  ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700'
+                  : 'bg-white text-gray-800 border-gray-200 hover:bg-gray-50'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                {loadingPacote === id ? (
+                  <Spinner size="sm" />
+                ) : (
+                  <Icon className="h-4 w-4" />
+                )}
+                {nome}
+                {destaque && (
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full ${destaque ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-600'}`}>
+                    Popular
+                  </span>
+                )}
+              </span>
+              <span className="flex items-center gap-3">
+                <span className={`text-xs ${destaque ? 'text-indigo-100' : 'text-gray-400'}`}>
+                  {tokens} tokens
+                </span>
+                <span>{preco}</span>
+              </span>
+            </button>
+          ))}
         </div>
 
-        <div className="space-y-2">
-          <button
-            onClick={handleAssinar}
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 disabled:opacity-50"
-          >
-            {loading ? <Spinner size="sm" /> : <Crown className="h-4 w-4" />}
-            {loading ? 'Redirecionando...' : 'Assinar agora — PIX'}
-          </button>
-          <button
-            onClick={onClose}
-            className="w-full py-2.5 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-xl"
-          >
-            Fechar
-          </button>
-        </div>
+        <button
+          onClick={onClose}
+          className="w-full py-2.5 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-xl"
+        >
+          Fechar
+        </button>
       </div>
     </div>
   )
