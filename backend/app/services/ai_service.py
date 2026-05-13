@@ -24,10 +24,6 @@ from pypdf import PdfReader
 from app.config import settings
 from app.db.supabase_client import get_supabase
 from app.services.detection_service import detectar_copias
-from app.services.email_service import (
-    enviar_email_correcao_concluida,
-    enviar_email_correcao_erro,
-)
 from app.services.storage_service import download_file
 
 logger = logging.getLogger(__name__)
@@ -146,25 +142,12 @@ async def corrigir_atividade(
     supabase = get_supabase()
     acc: list[tuple[int, int]] = []
     ctx_token = _token_accumulator.set(acc)
-    professor_email = ""
-    professor_nome = "Professor"
-    atividade_nome = ""
     try:
-        ativ_resp, prof_resp = await asyncio.gather(
-            asyncio.to_thread(
-                supabase.table("atividades").select("*, questoes(*)")
-                .eq("id", atividade_id).single().execute
-            ),
-            asyncio.to_thread(
-                supabase.table("professores").select("nome, email")
-                .eq("id", professor_id).single().execute
-            ),
+        ativ_resp = await asyncio.to_thread(
+            supabase.table("atividades").select("*, questoes(*)")
+            .eq("id", atividade_id).single().execute
         )
         ativ = ativ_resp.data
-        prof = prof_resp.data or {}
-        professor_email = prof.get("email", "")
-        professor_nome = prof.get("nome", "Professor")
-        atividade_nome = ativ.get("nome", "") if ativ else ""
         if not ativ:
             logger.warning("Atividade %s não encontrada — tarefa de correção cancelada", atividade_id)
             return
@@ -235,17 +218,12 @@ async def corrigir_atividade(
                 atividade_id, len(uploads),
                 extra={"atividade_id": atividade_id, "total": len(uploads)},
             )
-        await enviar_email_correcao_concluida(
-            professor_email, professor_nome, atividade_nome,
-            atividade_id, len(uploads), failures,
-        )
 
     except Exception:
         logger.error("Erro fatal na correcao %s:\n%s", atividade_id, traceback.format_exc())
         await asyncio.to_thread(
             supabase.table("atividades").update({"status": "erro"}).eq("id", atividade_id).execute
         )
-        await enviar_email_correcao_erro(professor_email, professor_nome, atividade_nome, atividade_id)
     finally:
         _token_accumulator.reset(ctx_token)
         await registrar_tokens(professor_id, sum(t[0] for t in acc), sum(t[1] for t in acc))
