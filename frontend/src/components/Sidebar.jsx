@@ -1,12 +1,13 @@
 import { useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Users, FileText, LogOut, Brain, X, Settings } from 'lucide-react'
+import { LayoutDashboard, Users, FileText, LogOut, Brain, X, Settings, Bot } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 
 const links = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/turmas', icon: Users, label: 'Turmas' },
   { to: '/atividades', icon: FileText, label: 'Atividades' },
+  { to: '/agente', icon: Bot, label: 'Assistente IA' },
 ]
 
 export default function Sidebar({ isOpen, onClose }) {

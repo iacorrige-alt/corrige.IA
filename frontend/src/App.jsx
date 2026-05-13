@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from './hooks/useAuth'
 import Sidebar from './components/Sidebar'
 import Spinner from './components/Spinner'
 import UpgradeModal from './components/UpgradeModal'
+import AgenteFlutuante from './components/AgenteFlutuante'
 import { api } from './lib/api'
 
 import LoginPage from './pages/LoginPage'
@@ -17,6 +18,7 @@ import AtividadeDetailPage from './pages/AtividadeDetailPage'
 import AlunoDashboardPage from './pages/AlunoDashboardPage'
 import TurmaDashboardPage from './pages/TurmaDashboardPage'
 import ProfilePage from './pages/ProfilePage'
+import AgentePage from './pages/AgentePage'
 
 function ProtectedLayout() {
   const { user, loading } = useAuth()
@@ -88,6 +90,8 @@ function ProtectedLayout() {
           onClose={() => setShowUpgrade(false)}
         />
       )}
+
+      <AgenteFlutuante />
     </div>
   )
 }
@@ -108,6 +112,7 @@ export default function App() {
             <Route path="/alunos/:id" element={<AlunoDashboardPage />} />
             <Route path="/turmas/:id/dashboard" element={<TurmaDashboardPage />} />
             <Route path="/perfil" element={<ProfilePage />} />
+            <Route path="/agente" element={<AgentePage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

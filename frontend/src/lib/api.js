@@ -210,7 +210,48 @@ export const api = {
 
   // ─── Pagamento ─────────────────────────────────────────────────────────────
   pagamento: {
-    criarCheckout: () => request('/pagamento/checkout', { method: 'POST' }),
-    cancelar: () => request('/pagamento/cancelar', { method: 'POST' }),
+    criarCheckout: (pacote) =>
+      request('/pagamento/checkout', { method: 'POST', body: JSON.stringify({ pacote }) }),
+  },
+
+  // ─── Agente ────────────────────────────────────────────────────────────────
+  agente: {
+    async *chat(messages, signal) {
+      const token = getToken()
+      const res = await fetch(`${API_URL}/agente/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ messages }),
+        signal,
+      })
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ detail: res.statusText }))
+        throw new Error(body.detail || 'Erro na requisição')
+      }
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop()
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const raw = line.slice(6).trim()
+            if (raw) {
+              try { yield JSON.parse(raw) } catch { /* skip */ }
+            }
+          }
+        }
+      }
+    },
   },
 }
