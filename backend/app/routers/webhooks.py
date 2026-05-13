@@ -1,4 +1,4 @@
-"""Webhook do AbacatePay — ativa/desativa planos conforme eventos de pagamento."""
+"""Webhook do AbacatePay v2 — ativa/desativa planos conforme eventos de pagamento."""
 import asyncio
 import base64
 import hashlib
@@ -16,38 +16,44 @@ router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
 
 def _verificar_assinatura(payload: bytes, sig_header: str) -> bool:
-    """Valida o HMAC-SHA256 enviado pelo AbacatePay no header X-Webhook-Signature."""
-    if not settings.abacatepay_api_key or not sig_header:
+    """Valida HMAC-SHA256 enviado pelo AbacatePay no header X-Webhook-Signature.
+
+    O AbacatePay usa o 'secret' definido no cadastro do webhook como chave do HMAC.
+    """
+    if not settings.abacatepay_webhook_secret or not sig_header:
         return False
     expected = base64.b64encode(
-        hmac.new(settings.abacatepay_api_key.encode(), payload, hashlib.sha256).digest()
+        hmac.new(
+            settings.abacatepay_webhook_secret.encode(),
+            payload,
+            hashlib.sha256,
+        ).digest()
     ).decode()
     return hmac.compare_digest(expected, sig_header)
 
 
 @router.post("/abacatepay")
 async def abacatepay_webhook(request: Request):
-    """Recebe eventos do AbacatePay e atualiza o plano do professor.
+    """Recebe eventos do AbacatePay v2 e atualiza o plano do professor.
 
-    A URL registrada no dashboard deve incluir o webhook secret como query param:
-    https://seu-backend/webhooks/abacatepay?webhookSecret=SEU_SECRET
+    Eventos tratados:
+      checkout.completed    → ativa plano pago
+      subscription.completed → ativa plano pago (via assinatura)
+      subscription.renewed  → mantém plano ativo
+      subscription.cancelled → volta para free_trial
+      checkout.lost         → bloqueia conta (pagamento perdido)
     """
     if not settings.abacatepay_webhook_secret:
         raise HTTPException(status_code=503, detail="Webhooks não configurados.")
 
-    # Validação pelo query param webhookSecret
-    webhook_secret = request.query_params.get("webhookSecret", "")
-    if webhook_secret != settings.abacatepay_webhook_secret:
-        logger.warning("Webhook AbacatePay com webhookSecret inválido")
-        raise HTTPException(status_code=403, detail="Webhook secret inválido.")
-
     payload = await request.body()
 
-    # Validação opcional pelo header HMAC (segunda camada de segurança)
     sig_header = request.headers.get("X-Webhook-Signature", "")
-    if sig_header and not _verificar_assinatura(payload, sig_header):
-        logger.warning("Webhook AbacatePay com assinatura HMAC inválida")
-        raise HTTPException(status_code=400, detail="Assinatura inválida.")
+    if not _verificar_assinatura(payload, sig_header):
+        logger.warning(
+            "Webhook AbacatePay com assinatura inválida (sig=%s…)", sig_header[:12]
+        )
+        raise HTTPException(status_code=403, detail="Assinatura inválida.")
 
     try:
         event_data = json.loads(payload)
@@ -58,15 +64,13 @@ async def abacatepay_webhook(request: Request):
     data: dict = event_data.get("data", {})
     supabase = get_supabase()
 
-    logger.info("Webhook AbacatePay recebido: %s", event, extra={"event": event})
+    logger.info("Webhook AbacatePay: %s", event, extra={"event": event})
 
-    # ── Pagamento de billing confirmado ───────────────────────────────────────
-    if event in ("billing.completed", "checkout.completed"):
-        billing = data.get("billing") or data.get("checkout") or {}
-        professor_id = billing.get("externalId")
-        customer = billing.get("customer") or {}
-        customer_id = customer.get("id")
-        subscription_id = billing.get("subscriptionId") or billing.get("subscription_id")
+    # ── Checkout pago ─────────────────────────────────────────────────────────
+    if event == "checkout.completed":
+        checkout = data.get("checkout") or data
+        professor_id = checkout.get("externalId")
+        customer_id = checkout.get("customerId")
 
         if professor_id:
             await asyncio.to_thread(
@@ -74,31 +78,53 @@ async def abacatepay_webhook(request: Request):
                     "plano": "pago",
                     "plano_ativo_em": "now()",
                     **({"abacatepay_customer_id": customer_id} if customer_id else {}),
-                    **({"abacatepay_subscription_id": subscription_id} if subscription_id else {}),
                 }).eq("id", professor_id).execute
             )
             logger.info(
-                "Plano pago ativado para professor %s", professor_id,
-                extra={"professor_id": professor_id, "event": event},
+                "Plano pago ativado (checkout) para professor %s", professor_id,
+                extra={"professor_id": professor_id},
             )
 
-    # ── Renovação mensal confirmada ───────────────────────────────────────────
+    # ── Assinatura ativada ────────────────────────────────────────────────────
+    elif event == "subscription.completed":
+        subscription = data.get("subscription") or data
+        sub_id = subscription.get("id")
+        customer_id = subscription.get("customerId")
+        # O externalId pode vir do checkout original que gerou a assinatura
+        professor_id = subscription.get("externalId")
+
+        update = {"plano": "pago", "plano_ativo_em": "now()"}
+        if sub_id:
+            update["abacatepay_subscription_id"] = sub_id
+
+        if professor_id:
+            await asyncio.to_thread(
+                supabase.table("professores").update(update)
+                .eq("id", professor_id).execute
+            )
+        elif customer_id:
+            await asyncio.to_thread(
+                supabase.table("professores").update(update)
+                .eq("abacatepay_customer_id", customer_id).execute
+            )
+        logger.info("Assinatura ativada: %s", sub_id, extra={"subscription_id": sub_id})
+
+    # ── Renovação mensal ──────────────────────────────────────────────────────
     elif event == "subscription.renewed":
-        subscription = data.get("subscription") or {}
+        subscription = data.get("subscription") or data
         sub_id = subscription.get("id")
         if sub_id:
-            # Garante que o plano continua ativo (caso tenha sido suspenso)
             await asyncio.to_thread(
                 supabase.table("professores")
                 .update({"plano": "pago"})
                 .eq("abacatepay_subscription_id", sub_id)
                 .execute
             )
-            logger.info("Assinatura renovada: %s", sub_id, extra={"subscription_id": sub_id})
+            logger.info("Assinatura renovada: %s", sub_id)
 
     # ── Assinatura cancelada ──────────────────────────────────────────────────
     elif event == "subscription.cancelled":
-        subscription = data.get("subscription") or {}
+        subscription = data.get("subscription") or data
         sub_id = subscription.get("id")
         if sub_id:
             await asyncio.to_thread(
@@ -107,25 +133,19 @@ async def abacatepay_webhook(request: Request):
                     "abacatepay_subscription_id": None,
                 }).eq("abacatepay_subscription_id", sub_id).execute
             )
-            logger.info(
-                "Assinatura cancelada: %s", sub_id,
-                extra={"subscription_id": sub_id, "event": event},
-            )
+            logger.info("Assinatura cancelada: %s", sub_id)
 
-    # ── Cobrança recusada (falha de pagamento) ────────────────────────────────
-    elif event in ("billing.failed", "subscription.payment_failed"):
-        subscription = data.get("subscription") or data.get("billing") or {}
-        customer_id = (subscription.get("customer") or {}).get("id")
-        if customer_id:
+    # ── Pagamento perdido/expirado ────────────────────────────────────────────
+    elif event == "checkout.lost":
+        checkout = data.get("checkout") or data
+        professor_id = checkout.get("externalId")
+        if professor_id:
             await asyncio.to_thread(
                 supabase.table("professores")
                 .update({"plano": "bloqueado"})
-                .eq("abacatepay_customer_id", customer_id)
+                .eq("id", professor_id)
                 .execute
             )
-            logger.warning(
-                "Pagamento falhou para customer %s — conta bloqueada", customer_id,
-                extra={"customer_id": customer_id, "event": event},
-            )
+            logger.warning("Checkout perdido para professor %s", professor_id)
 
     return {"received": True}
