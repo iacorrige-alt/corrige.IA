@@ -33,6 +33,7 @@ async def listar_atividades(current_user: dict = Depends(get_current_user)):
         .select("*, questoes(count)")
         .eq("professor_id", current_user["id"])
         .order("data_criacao", desc=True)
+        .limit(200)
         .execute
     )
     for a in result.data:
@@ -262,14 +263,15 @@ async def reprocessar_atividade(
     if not uploads.data:
         raise HTTPException(status_code=400, detail="Nenhum arquivo enviado para reprocessar.")
 
-    await asyncio.to_thread(
-        supabase.table("resultados").delete().eq("atividade_id", atividade_id).execute
-    )
+    # Atualiza status ANTES de deletar resultados — se o update falhar, dados ficam íntegros.
     now_utc = datetime.now(timezone.utc).isoformat()
     await asyncio.to_thread(
         supabase.table("atividades")
         .update({"status": "corrigindo", "correcao_iniciada_em": now_utc, "uploads_com_erro": 0})
         .eq("id", atividade_id).execute
+    )
+    await asyncio.to_thread(
+        supabase.table("resultados").delete().eq("atividade_id", atividade_id).execute
     )
     background_tasks.add_task(corrigir_atividade, atividade_id, current_user["id"])
     return {"message": "Reprocessamento iniciado.", "atividade_id": atividade_id}
@@ -283,11 +285,13 @@ async def adicionar_questao(
 ):
     supabase = get_supabase()
     ativ = await asyncio.to_thread(
-        supabase.table("atividades").select("id")
+        supabase.table("atividades").select("id, status")
         .eq("id", atividade_id).eq("professor_id", current_user["id"]).single().execute
     )
     if not ativ.data:
         raise HTTPException(status_code=404, detail="Atividade não encontrada.")
+    if ativ.data["status"] in ("corrigindo", "concluida"):
+        raise HTTPException(status_code=409, detail="Não é possível alterar questões de uma atividade já concluída ou em correção.")
 
     result = await asyncio.to_thread(
         supabase.table("questoes").insert({
@@ -374,15 +378,15 @@ async def listar_uploads(
         .execute
     )
 
-    result = []
-    for u in uploads.data:
+    async def _sign_upload(u: dict) -> dict:
         aluno = u.pop("alunos", None) or {}
         try:
             signed_url = await create_signed_url(u["storage_path"])
         except Exception:
             signed_url = None
-        result.append({**u, "aluno_nome": aluno.get("nome"), "signed_url": signed_url})
-    return result
+        return {**u, "aluno_nome": aluno.get("nome"), "signed_url": signed_url}
+
+    return list(await asyncio.gather(*[_sign_upload(u) for u in uploads.data]))
 
 
 @router.get("/{atividade_id}/resultados", response_model=list[ResultadoOut])

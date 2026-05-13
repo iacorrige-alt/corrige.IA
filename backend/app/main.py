@@ -81,10 +81,14 @@ _access_logger = logging.getLogger("corrigeai.access")
 
 
 @app.middleware("http")
-async def _log_requests(request: Request, call_next):
+async def _security_and_log(request: Request, call_next):
     start = time.perf_counter()
     response = await call_next(request)
     duration_ms = round((time.perf_counter() - start) * 1000, 1)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
     _access_logger.info(
         "%s %s %d",
         request.method, request.url.path, response.status_code,

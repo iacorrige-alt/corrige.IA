@@ -55,7 +55,7 @@ async def register(body: RegisterRequest):
         logger.error("Erro ao criar conta para %s: %s", body.email, exc)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Não foi possível criar a conta: {exc}",
+            detail="Não foi possível criar a conta. Verifique os dados e tente novamente.",
         ) from exc
     except Exception as exc:
         logger.error("Erro inesperado no registro: %s", exc)
