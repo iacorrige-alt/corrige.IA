@@ -1,12 +1,15 @@
 import { useState } from 'react'
 import { Bot, X, Maximize2 } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import ChatInterface from './ChatInterface'
 import { useAgente } from '../hooks/useAgente'
 
 export default function AgenteFlutuante() {
   const [isOpen, setIsOpen] = useState(false)
   const agente = useAgente()
+  const { pathname } = useLocation()
+
+  if (pathname === '/agente') return null
 
   return (
     <>
@@ -14,7 +17,7 @@ export default function AgenteFlutuante() {
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 z-40 w-14 h-14 bg-gradient-to-br from-brand-600 to-brick-500 text-white rounded-full shadow-xl hover:shadow-brick-500/40 hover:scale-105 flex items-center justify-center transition-all"
+          className="fixed bottom-24 right-6 z-40 w-14 h-14 bg-gradient-to-br from-brand-600 to-brick-500 text-white rounded-full shadow-xl hover:shadow-brick-500/40 hover:scale-105 flex items-center justify-center transition-all"
           title="Agente IA — Beta"
         >
           <Bot className="h-6 w-6" />
