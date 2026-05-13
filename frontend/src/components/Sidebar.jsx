@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { LayoutDashboard, Users, FileText, LogOut, X, Settings, Bot } from 'lucide-react'
+import logoUrl from '../assets/logo.jpg'
 import { useAuth } from '../hooks/useAuth'
 
 const links = [
@@ -39,7 +40,7 @@ export default function Sidebar({ isOpen, onClose }) {
         {/* Logo */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-white/10">
           <div className="flex items-center gap-3">
-            <img src="/logo.jpg" alt="CorrigeAI" className="w-9 h-9 rounded-xl flex-shrink-0 object-cover" />
+            <img src={logoUrl} alt="CorrigeAI" className="w-9 h-9 rounded-xl flex-shrink-0 object-cover" />
             <div>
               <p className="font-bold text-white text-sm">CorrigeAI</p>
               <p className="text-xs text-white/50">Correção com IA</p>

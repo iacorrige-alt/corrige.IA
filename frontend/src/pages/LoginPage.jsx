@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Eye, EyeOff } from 'lucide-react'
+import logoUrl from '../assets/logo.jpg'
 import { useAuth } from '../hooks/useAuth'
 import Spinner from '../components/Spinner'
 
@@ -46,7 +47,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <img src="/logo.jpg" alt="CorrigeAI" className="w-16 h-16 rounded-2xl shadow-lg mb-4 object-cover" />
+          <img src={logoUrl} alt="CorrigeAI" className="w-16 h-16 rounded-2xl shadow-lg mb-4 object-cover" />
           <h1 className="text-3xl font-bold text-gray-900">CorrigeAI</h1>
           <p className="text-gray-500 mt-1">Correção automática com inteligência artificial</p>
         </div>
