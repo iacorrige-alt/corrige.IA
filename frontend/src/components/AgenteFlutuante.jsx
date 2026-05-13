@@ -14,10 +14,13 @@ export default function AgenteFlutuante() {
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 z-40 w-14 h-14 bg-indigo-600 text-white rounded-full shadow-xl hover:bg-indigo-700 flex items-center justify-center transition-colors"
-          title="Assistente IA"
+          className="fixed bottom-6 right-6 z-40 w-14 h-14 bg-gradient-to-br from-indigo-600 to-violet-600 text-white rounded-full shadow-xl hover:shadow-indigo-300 hover:scale-105 flex items-center justify-center transition-all"
+          title="Agente IA — Beta"
         >
           <Bot className="h-6 w-6" />
+          <span className="absolute -top-1 -right-1 bg-green-400 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none shadow">
+            BETA
+          </span>
         </button>
       )}
 
@@ -27,12 +30,15 @@ export default function AgenteFlutuante() {
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-white flex-shrink-0">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 bg-indigo-100 rounded-xl flex items-center justify-center">
-                <Bot className="h-4 w-4 text-indigo-600" />
+              <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-xl flex items-center justify-center shadow-sm">
+                <Bot className="h-4 w-4 text-white" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-gray-900">Assistente IA</p>
-                <p className="text-xs text-gray-400">CorrigeAI</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm font-semibold text-gray-900">Agente Pedagógico</p>
+                  <span className="bg-green-100 text-green-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none">BETA</span>
+                </div>
+                <p className="text-xs text-gray-400">GPT-4o Vision · CorrigeAI</p>
               </div>
             </div>
             <div className="flex items-center gap-1">

@@ -184,24 +184,42 @@ export default function ChatInterface({ messages, streaming, activeTools, sendMe
       {/* Messages area */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1 min-h-0">
         {isEmpty && (
-          <div className="flex flex-col items-center justify-center h-full text-center py-12">
-            <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center mb-4">
-              <span className="text-3xl">🎓</span>
+          <div className="flex flex-col items-center justify-center h-full text-center py-8 px-2">
+            <span className="inline-flex items-center gap-1.5 bg-indigo-50 text-indigo-600 text-xs font-semibold px-3 py-1 rounded-full border border-indigo-100 mb-5">
+              <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse" />
+              Beta — acesso antecipado gratuito
+            </span>
+            <div className="w-14 h-14 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-indigo-200">
+              <span className="text-2xl">🎓</span>
             </div>
-            <p className="text-gray-700 font-medium mb-1">Como posso ajudar?</p>
-            <p className="text-xs text-gray-400 max-w-xs">
-              Posso analisar imagens, criar questões, interpretar resultados das suas turmas e muito mais.
+            <p className="text-gray-900 font-bold text-sm mb-1.5">Seu assistente pedagógico com IA</p>
+            <p className="text-xs text-gray-500 max-w-[260px] leading-relaxed mb-5">
+              Analisa turmas, cria provas, detecta padrões de erro e responde suas dúvidas — em segundos.
             </p>
-            <div className="grid grid-cols-1 gap-2 mt-5 w-full max-w-xs">
+            <div className="grid grid-cols-2 gap-2 w-full max-w-[280px] mb-5 text-left">
               {[
-                'Quais são minhas turmas?',
-                'Crie 5 questões de múltipla escolha sobre frações',
-                'Como melhorar o desempenho da turma?',
+                { icon: '📊', text: 'Analisa desempenho por aluno' },
+                { icon: '✍️', text: 'Cria questões por disciplina' },
+                { icon: '🔍', text: 'Detecta padrões de erro' },
+                { icon: '📸', text: 'Interpreta fotos de provas' },
+              ].map(({ icon, text }) => (
+                <div key={text} className="flex items-start gap-2 bg-gray-50 rounded-xl p-2.5 border border-gray-100">
+                  <span className="text-sm leading-none mt-0.5 flex-shrink-0">{icon}</span>
+                  <span className="text-xs text-gray-600 leading-tight">{text}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-gray-400 mb-2">Experimente agora:</p>
+            <div className="space-y-2 w-full max-w-[280px]">
+              {[
+                'Quais alunos precisam de mais atenção?',
+                'Crie 5 questões de matemática para o 7º ano',
+                'Onde minha turma está errando mais?',
               ].map((s) => (
                 <button
                   key={s}
                   onClick={() => { setInput(s); textareaRef.current?.focus() }}
-                  className="text-xs text-left px-3 py-2 bg-gray-50 hover:bg-indigo-50 hover:text-indigo-700 rounded-xl border border-gray-200 transition-colors"
+                  className="text-xs text-left w-full px-3 py-2.5 bg-white hover:bg-indigo-50 hover:text-indigo-700 rounded-xl border border-gray-200 hover:border-indigo-200 transition-colors"
                 >
                   {s}
                 </button>

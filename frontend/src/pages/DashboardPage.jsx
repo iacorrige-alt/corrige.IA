@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Users, FileText, CheckCircle, Clock, TrendingUp, Zap, ArrowRight } from 'lucide-react'
+import { Users, FileText, CheckCircle, Clock, TrendingUp, Zap, ArrowRight, Bot, Sparkles } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../hooks/useAuth'
 import Spinner from '../components/Spinner'
@@ -151,6 +151,29 @@ export default function DashboardPage() {
               color={tokenColor}
               sub={`${tokensUsados.toLocaleString('pt-BR')} / ${limiteTokens.toLocaleString('pt-BR')}`} />
           </div>
+
+          {/* Agente IA — banner promocional */}
+          <Link
+            to="/agente"
+            className="flex items-center gap-4 bg-gradient-to-r from-indigo-600 to-violet-600 rounded-2xl p-4 sm:p-5 mb-6 sm:mb-8 shadow-lg shadow-indigo-200 hover:shadow-indigo-300 hover:scale-[1.01] transition-all group"
+          >
+            <div className="w-11 h-11 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
+              <Bot className="h-6 w-6 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-0.5">
+                <p className="text-white font-bold text-sm">Agente Pedagógico IA</p>
+                <span className="bg-green-400 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none">BETA</span>
+              </div>
+              <p className="text-indigo-100 text-xs leading-snug">
+                Analise suas turmas, crie provas e detecte padrões de erro — tudo por conversa.
+              </p>
+            </div>
+            <div className="flex items-center gap-1 text-white/80 group-hover:text-white transition-colors flex-shrink-0">
+              <Sparkles className="h-4 w-4" />
+              <ArrowRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
+            </div>
+          </Link>
 
           {/* Recent cards — stacked on mobile, 2-col on desktop */}
           <div className="grid lg:grid-cols-2 gap-4 sm:gap-6">
