@@ -12,7 +12,7 @@ from app.dependencies import get_current_user
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/pagamento", tags=["pagamento"])
 
-_ABACATE_URL = "https://api.abacatepay.com/v1"
+_ABACATE_URL = "https://api.abacatepay.com/v2"
 
 
 def _headers() -> dict:
@@ -43,20 +43,10 @@ async def criar_checkout(current_user: dict = Depends(get_current_user)):
     headers = _headers()
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(
-            f"{_ABACATE_URL}/billing/create",
+            f"{_ABACATE_URL}/checkouts/create",
             headers=headers,
             json={
-                "frequency": "MONTHLY",
-                "methods": ["PIX"],
-                "products": [
-                    {
-                        "externalId": "plano_mensal_corrigeai",
-                        "name": "CorrigeAI — Plano Mensal",
-                        "quantity": 1,
-                        "price": settings.abacatepay_preco_centavos,
-                        "description": "Correção ilimitada de provas com IA",
-                    }
-                ],
+                "items": [{"id": settings.abacatepay_product_id, "quantity": 1}],
                 "returnUrl": f"{settings.frontend_url}/perfil?cancelado=true",
                 "completionUrl": f"{settings.frontend_url}/perfil?sucesso=true",
                 "externalId": current_user["id"],
@@ -67,12 +57,12 @@ async def criar_checkout(current_user: dict = Depends(get_current_user)):
             },
         )
 
-    if resp.status_code not in (200, 201):
-        logger.error("AbacatePay billing error %d: %s", resp.status_code, resp.text)
+    if resp.status_code not in (200, 201) or not resp.json().get("success"):
+        logger.error("AbacatePay checkout error %d: %s", resp.status_code, resp.text)
         raise HTTPException(status_code=502, detail="Erro ao criar cobrança. Tente novamente.")
 
     payload = resp.json()
-    url = (payload.get("data") or {}).get("url") or payload.get("url")
+    url = (payload.get("data") or {}).get("url")
     if not url:
         logger.error("AbacatePay retornou sem URL: %s", payload)
         raise HTTPException(status_code=502, detail="URL de pagamento não retornada.")
