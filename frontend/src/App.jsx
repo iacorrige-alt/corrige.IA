@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
-import { Menu, Brain } from 'lucide-react'
+import { Menu } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import Sidebar from './components/Sidebar'
@@ -72,9 +72,7 @@ function ProtectedLayout() {
             <Menu className="h-5 w-5" />
           </button>
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-white/15 rounded-lg flex items-center justify-center">
-              <Brain className="h-4 w-4 text-white" />
-            </div>
+            <img src="/logo.jpg" alt="CorrigeAI" className="w-7 h-7 rounded-lg object-cover" />
             <span className="font-bold text-white text-sm">CorrigeAI</span>
           </div>
         </header>

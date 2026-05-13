@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Users, FileText, LogOut, Brain, X, Settings, Bot } from 'lucide-react'
+import { LayoutDashboard, Users, FileText, LogOut, X, Settings, Bot } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 
 const links = [
@@ -39,9 +39,7 @@ export default function Sidebar({ isOpen, onClose }) {
         {/* Logo */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-white/10">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-white/15 rounded-xl flex items-center justify-center flex-shrink-0">
-              <Brain className="h-5 w-5 text-white" />
-            </div>
+            <img src="/logo.jpg" alt="CorrigeAI" className="w-9 h-9 rounded-xl flex-shrink-0 object-cover" />
             <div>
               <p className="font-bold text-white text-sm">CorrigeAI</p>
               <p className="text-xs text-white/50">Correção com IA</p>
