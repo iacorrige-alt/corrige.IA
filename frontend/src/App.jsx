@@ -58,10 +58,10 @@ function ProtectedLayout() {
   }
 
   return (
-    <div className="flex min-h-screen bg-cream">
+    <div className="flex bg-cream">
       <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} />
 
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
         {/* Mobile top bar */}
         <header className="md:hidden sticky top-0 z-30 flex items-center gap-3 px-4 py-3 bg-brand-600 border-b border-brand-700">
           <button
