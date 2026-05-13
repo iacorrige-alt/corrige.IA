@@ -99,6 +99,10 @@ async def register(body: RegisterRequest):
             )
         except Exception as insert_exc:
             logger.error("Fallback insert em professores falhou: %s", insert_exc)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Erro ao criar conta. Tente novamente em alguns instantes.",
+            ) from insert_exc
 
     logger.info(
         "Nova conta criada: %s (id=%s)",

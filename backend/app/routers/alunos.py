@@ -150,6 +150,8 @@ async def atualizar_aluno(
         .eq("id", aluno_id)
         .execute
     )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Aluno não encontrado.")
     return result.data[0]
 
 

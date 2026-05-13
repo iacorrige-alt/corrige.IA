@@ -10,7 +10,6 @@ import hashlib
 import json
 import logging
 import random
-import threading
 import time
 import traceback
 from collections import OrderedDict
@@ -36,7 +35,14 @@ _CACHE_MAX_SIZE = 200
 _CACHE_TTL_SECONDS = 3600
 # Valores: (resultado: dict, timestamp: float)
 _analise_turma_cache: OrderedDict[str, tuple[dict, float]] = OrderedDict()
-_analise_turma_cache_lock = threading.Lock()  # protege leitura+escrita atômica no LRU
+_analise_turma_cache_lock: asyncio.Lock | None = None  # lazy-initialized on first use
+
+
+def _ensure_cache_lock() -> asyncio.Lock:
+    global _analise_turma_cache_lock
+    if _analise_turma_cache_lock is None:
+        _analise_turma_cache_lock = asyncio.Lock()
+    return _analise_turma_cache_lock
 
 client = AsyncOpenAI(
     api_key=settings.openai_api_key,
@@ -92,7 +98,7 @@ async def _openai_call(coro_factory, *, max_attempts: int = 4):
                 await asyncio.sleep(delay)
 
 
-async def _registrar_tokens(professor_id: str, input_tokens: int, output_tokens: int) -> None:
+async def registrar_tokens(professor_id: str, input_tokens: int, output_tokens: int) -> None:
     """Incremento atômico dos contadores de tokens via RPC. Best-effort — nunca levanta."""
     if input_tokens <= 0 and output_tokens <= 0:
         return
@@ -142,7 +148,15 @@ async def corrigir_atividade(
             .eq("id", atividade_id).single().execute
         )
         ativ = ativ_resp.data
-        questoes = sorted(ativ.get("questoes", []), key=lambda q: q["ordem"])
+        if not ativ:
+            logger.warning("Atividade %s não encontrada — tarefa de correção cancelada", atividade_id)
+            return
+        if not ativ.get("questoes"):
+            raise RuntimeError(
+                f"Atividade {atividade_id} não possui questões cadastradas — "
+                "adicione questões antes de corrigir."
+            )
+        questoes = sorted(ativ["questoes"], key=lambda q: q["ordem"])
 
         query = supabase.table("uploads").select("*").eq("atividade_id", atividade_id)
         if upload_ids:
@@ -212,7 +226,7 @@ async def corrigir_atividade(
         )
     finally:
         _token_accumulator.reset(ctx_token)
-        await _registrar_tokens(professor_id, sum(t[0] for t in acc), sum(t[1] for t in acc))
+        await registrar_tokens(professor_id, sum(t[0] for t in acc), sum(t[1] for t in acc))
 
 
 # ─── Internal helpers ─────────────────────────────────────────────────────────
@@ -274,7 +288,7 @@ async def _processar_upload(
     )
 
     respostas_ia = await _corrigir_com_ia(texto, ativ, questoes, gabarito_pdf_texto, rubricas_autonomas)
-    await asyncio.to_thread(_salvar_resultado, supabase, ativ["id"], aluno_id, questoes, respostas_ia)
+    await asyncio.to_thread(_salvar_resultado, ativ["id"], aluno_id, questoes, respostas_ia)
 
 
 async def _extrair_texto_pdf(content: bytes) -> str:
@@ -365,6 +379,8 @@ async def _extrair_texto_imagem(content: bytes, content_type: str = "image/jpeg"
             max_tokens=4096,
         )
     )
+    if not resp.choices:
+        raise RuntimeError("GPT retornou resposta sem choices em _extrair_texto_imagem")
     return resp.choices[0].message.content or ""
 
 
@@ -388,13 +404,17 @@ async def _identificar_aluno(texto: str, alunos: list[dict]) -> str | None:
     )
     resp = await _openai_call(
         lambda: client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=100,
             temperature=0,
         )
     )
-    nome_encontrado = (resp.choices[0].message.content or "").strip().lower()
+    if not resp.choices:
+        return None
+    # Fix: take first line only — GPT occasionally adds explanatory text after a newline
+    raw_nome = (resp.choices[0].message.content or "").strip()
+    nome_encontrado = raw_nome.split('\n')[0].strip().lower()
 
     if nome_encontrado == "desconhecido":
         return None
@@ -518,13 +538,15 @@ Nao use flag "copia" — similaridade entre alunos e detectada por outro sistema
 
     resp = await _openai_call(
         lambda: client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=4096,
             temperature=0,
             response_format={"type": "json_object"},
         )
     )
+    if not resp.choices:
+        raise RuntimeError("GPT retornou resposta vazia — correcao com gabarito abortada.")
     return _parse_respostas(resp.choices[0].message.content or "{}", "correcao com gabarito")
 
 
@@ -564,7 +586,7 @@ Baseie os criterios no conteudo da questao. Responda em portugues."""
 
     resp = await _openai_call(
         lambda: client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=4096,
             temperature=0.1,
@@ -572,6 +594,9 @@ Baseie os criterios no conteudo da questao. Responda em portugues."""
         )
     )
 
+    if not resp.choices:
+        logger.warning("GPT retornou resposta vazia para rubrica autonoma — corrigindo sem rubrica")
+        return {}
     try:
         raw = json.loads(resp.choices[0].message.content or "{}")
     except json.JSONDecodeError:
@@ -644,13 +669,15 @@ Flag "ia": texto excessivamente formal/padronizado sem erros naturais de escrita
 
     resp = await _openai_call(
         lambda: client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=4096,
             temperature=0,
             response_format={"type": "json_object"},
         )
     )
+    if not resp.choices:
+        raise RuntimeError("GPT retornou resposta vazia — correcao autonoma abortada.")
     return _parse_respostas(resp.choices[0].message.content or "{}", "correcao autonoma")
 
 
@@ -680,13 +707,13 @@ async def _corrigir_autonomo(
 
 
 def _salvar_resultado(
-    supabase,
     atividade_id: str,
     aluno_id: str,
     questoes: list[dict],
     respostas_ia: list[dict],
 ) -> None:
     """Persist grading results to the database (runs in thread pool)."""
+    supabase = get_supabase()  # thread-local client — safe across asyncio.to_thread boundaries
     peso_map = {q["id"]: float(q.get("peso", 1)) for q in questoes}
     nota_total = 0.0
     for r in respostas_ia:
@@ -746,6 +773,9 @@ async def corrigir_upload(upload_id: str, atividade_id: str, professor_id: str) 
             .eq("id", atividade_id).single().execute
         )
         ativ = ativ_resp.data
+        if not ativ:
+            logger.warning("Atividade %s não encontrada — corrigir_upload cancelado", atividade_id)
+            return
         questoes = sorted(ativ.get("questoes", []), key=lambda q: q["ordem"])
 
         upload_resp = await asyncio.to_thread(
@@ -772,7 +802,7 @@ async def corrigir_upload(upload_id: str, atividade_id: str, professor_id: str) 
         logger.error("Erro ao corrigir upload %s:\n%s", upload_id, traceback.format_exc())
     finally:
         _token_accumulator.reset(ctx_token)
-        await _registrar_tokens(professor_id, sum(t[0] for t in acc), sum(t[1] for t in acc))
+        await registrar_tokens(professor_id, sum(t[0] for t in acc), sum(t[1] for t in acc))
 
 
 # ─── Extração de questões de PDF ─────────────────────────────────────────────
@@ -786,7 +816,7 @@ async def extrair_questoes_pdf(content: bytes, content_type: str, professor_id: 
     finally:
         _token_accumulator.reset(ctx_token)
         if professor_id:
-            await _registrar_tokens(professor_id, sum(t[0] for t in acc), sum(t[1] for t in acc))
+            await registrar_tokens(professor_id, sum(t[0] for t in acc), sum(t[1] for t in acc))
 
 
 async def _extrair_questoes_pdf_impl(content: bytes, content_type: str) -> list[dict]:
@@ -826,7 +856,7 @@ Responda em português."""
 
     resp = await _openai_call(
         lambda: client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=4096,
             temperature=0,
@@ -834,6 +864,9 @@ Responda em português."""
         )
     )
 
+    if not resp.choices:
+        logger.error("extrair_questoes_pdf: GPT retornou resposta sem choices")
+        return []
     try:
         raw = json.loads(resp.choices[0].message.content or "{}")
     except json.JSONDecodeError:
@@ -881,7 +914,7 @@ async def analisar_turma(
             sort_keys=True,
         ).encode()
     ).hexdigest()
-    with _analise_turma_cache_lock:
+    async with _ensure_cache_lock():
         if cache_key in _analise_turma_cache:
             cached_result, cached_at = _analise_turma_cache[cache_key]
             if time.monotonic() - cached_at < _CACHE_TTL_SECONDS:
@@ -925,15 +958,17 @@ Seja especifico e baseado nos numeros. Responda em portugues."""
     try:
         resp = await _openai_call(
             lambda: client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=1024,
                 temperature=0.3,
                 response_format={"type": "json_object"},
             )
         )
+        if not resp.choices:
+            raise RuntimeError("GPT retornou resposta vazia para analise de turma")
         result = json.loads(resp.choices[0].message.content or "{}")
-        with _analise_turma_cache_lock:
+        async with _ensure_cache_lock():
             _analise_turma_cache[cache_key] = (result, time.monotonic())
             if len(_analise_turma_cache) > _CACHE_MAX_SIZE:
                 _analise_turma_cache.popitem(last=False)
@@ -949,4 +984,4 @@ Seja especifico e baseado nos numeros. Responda em portugues."""
     finally:
         _token_accumulator.reset(ctx_token)
         if professor_id:
-            await _registrar_tokens(professor_id, sum(t[0] for t in acc), sum(t[1] for t in acc))
+            await registrar_tokens(professor_id, sum(t[0] for t in acc), sum(t[1] for t in acc))
