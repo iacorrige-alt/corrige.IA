@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     abacatepay_produto_regular_id: str = "prod_unqPxjFG5ytKf3PpcdJugjsd"
     abacatepay_produto_pro_id: str = "prod_tL6xTH3jDNS6KucjWEsCW2uu"
     frontend_url: str = "http://localhost:5173"
+    resend_api_key: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
