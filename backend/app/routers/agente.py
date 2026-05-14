@@ -354,6 +354,7 @@ async def _executar_tool(name: str, args: dict, professor_id: str) -> str:
 async def _stream_chat(
     messages: list[dict],
     professor_id: str,
+    model: str = "gpt-4o-mini",
 ) -> AsyncGenerator[str, None]:
     total_input = 0
     total_output = 0
@@ -365,7 +366,7 @@ async def _stream_chat(
 
             try:
                 stream = await _client.chat.completions.create(
-                    model="gpt-4o",
+                    model=model,
                     messages=current_messages,
                     tools=_TOOLS if use_tools else None,
                     stream=True,
@@ -539,8 +540,11 @@ async def chat(
                 ],
             })
 
+    tem_imagem = any(msg.image_base64 for msg in body.messages)
+    model = "gpt-4o" if tem_imagem else "gpt-4o-mini"
+
     return StreamingResponse(
-        _stream_chat(openai_messages, current_user["id"]),
+        _stream_chat(openai_messages, current_user["id"], model=model),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
