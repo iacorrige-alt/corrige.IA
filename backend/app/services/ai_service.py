@@ -10,10 +10,13 @@ import hashlib
 import json
 import logging
 import random
+import re
 import time
 import traceback
+import unicodedata
 from collections import OrderedDict
 from contextvars import ContextVar
+from datetime import datetime, timezone
 from difflib import get_close_matches
 from io import BytesIO
 
@@ -60,6 +63,11 @@ _token_accumulator: ContextVar[list[tuple[int, int]] | None] = ContextVar("token
 def _esc(text: str) -> str:
     """Escape closing XML tags so prompt delimiters can't be broken by content."""
     return text.replace("</", "<\\/")
+
+
+def _norm(s: str) -> str:
+    """Lowercase + strip accents for fuzzy pre-match without LLM."""
+    return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii").lower()
 
 # 15 slots × ~8s/call ≈ ~110 RPM — bem abaixo do limite Tier 1 (500 RPM).
 # Impede rajadas quando vários professores corrigem ao mesmo tempo.
@@ -384,18 +392,36 @@ async def _extrair_texto_imagem(content: bytes, content_type: str = "image/jpeg"
     return resp.choices[0].message.content or ""
 
 
+_PREFIXO_RE = re.compile(r"^\s*(nome|aluno|estudante|candidato)\s*:?\s*", re.IGNORECASE)
+
+
 async def _identificar_aluno(texto: str, alunos: list[dict]) -> str | None:
     """Match student name found in text against the class list.
 
-    Strategy: GPT-4o extracts the name → exact match → fuzzy match (cutoff 0.72).
-    Fuzzy match handles accents, typos, and partial names without a second LLM call.
+    Strategy: fuzzy match nas primeiras linhas → LLM → exact match → fuzzy match (cutoff 0.72).
+    Fuzzy-first evita a chamada ao LLM quando o nome aparece claramente no cabeçalho da prova.
     """
     if not alunos:
         return None
 
     nomes = [a["nome"] for a in alunos]
     nome_para_id = {a["nome"].lower(): a["id"] for a in alunos}
+    nomes_norm = {_norm(a["nome"]): a["id"] for a in alunos}
 
+    # ── Fuzzy-first: tenta identificar sem LLM nas primeiras linhas ──────────
+    for linha in texto[:400].splitlines():
+        linha_norm = _norm(_PREFIXO_RE.sub("", linha))
+        if len(linha_norm) < 3 or len(linha_norm) > 60:
+            continue
+        if linha_norm in nomes_norm:
+            logger.info("Aluno identificado sem LLM (exato): '%s'", linha_norm)
+            return nomes_norm[linha_norm]
+        matches = get_close_matches(linha_norm, nomes_norm.keys(), n=1, cutoff=0.82)
+        if matches:
+            logger.info("Aluno identificado sem LLM (fuzzy): '%s' → '%s'", linha_norm, matches[0])
+            return nomes_norm[matches[0]]
+
+    # ── Fallback: LLM ─────────────────────────────────────────────────────────
     prompt = (
         f"No texto abaixo, identifique qual dos seguintes alunos e o autor da prova.\n"
         f"Lista de alunos: {', '.join(nomes)}\n\n"
@@ -925,6 +951,33 @@ async def analisar_turma(
                 return cached_result
             del _analise_turma_cache[cache_key]  # expirado
 
+    # ── Cache persistente (Supabase) — sobrevive a restarts do servidor ───────
+    if turma_id:
+        try:
+            _db = get_supabase()
+            _cached = await asyncio.to_thread(
+                _db.table("turmas")
+                .select("analise_ia_cache_key, analise_ia_cache, analise_ia_cache_at")
+                .eq("id", turma_id)
+                .single()
+                .execute
+            )
+            _d = _cached.data or {}
+            if (
+                _d.get("analise_ia_cache_key") == cache_key
+                and _d.get("analise_ia_cache")
+                and _d.get("analise_ia_cache_at")
+            ):
+                _db_at = datetime.fromisoformat(_d["analise_ia_cache_at"].replace("Z", "+00:00"))
+                if (datetime.now(timezone.utc) - _db_at).total_seconds() < _CACHE_TTL_SECONDS:
+                    _result = _d["analise_ia_cache"]
+                    async with _ensure_cache_lock():
+                        _analise_turma_cache[cache_key] = (_result, time.monotonic())
+                    logger.info("Cache DB hit — analise de turma '%s' reutilizada", turma_nome)
+                    return _result
+        except Exception as _exc:
+            logger.warning("Erro ao ler cache persistente de analise: %s", _exc)
+
     dist_fmt = "\n".join(
         f"  {d['faixa']}: {d['count']} aluno(s)" for d in metricas.get("distribuicao", [])
     )
@@ -974,6 +1027,20 @@ Seja especifico e baseado nos numeros. Responda em portugues."""
             _analise_turma_cache[cache_key] = (result, time.monotonic())
             if len(_analise_turma_cache) > _CACHE_MAX_SIZE:
                 _analise_turma_cache.popitem(last=False)
+        if turma_id:
+            try:
+                await asyncio.to_thread(
+                    get_supabase().table("turmas")
+                    .update({
+                        "analise_ia_cache_key": cache_key,
+                        "analise_ia_cache": result,
+                        "analise_ia_cache_at": datetime.now(timezone.utc).isoformat(),
+                    })
+                    .eq("id", turma_id)
+                    .execute
+                )
+            except Exception as exc:
+                logger.warning("Erro ao persistir cache de analise: %s", exc)
         return result
     except Exception as exc:
         logger.error("Erro na analise de turma: %s", exc)
