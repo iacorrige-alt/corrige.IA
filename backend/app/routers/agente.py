@@ -543,6 +543,10 @@ async def chat(
     tem_imagem = any(msg.image_base64 for msg in body.messages)
     model = "gpt-4o" if tem_imagem else "gpt-4o-mini"
 
+    # Mantém system prompt + últimas 10 mensagens para evitar input crescente em conversas longas
+    if len(openai_messages) > 11:
+        openai_messages = openai_messages[:1] + openai_messages[-10:]
+
     return StreamingResponse(
         _stream_chat(openai_messages, current_user["id"], model=model),
         media_type="text/event-stream",

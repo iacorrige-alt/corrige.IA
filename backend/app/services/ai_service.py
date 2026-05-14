@@ -536,11 +536,12 @@ Regras para flags:
 - "plagio": resposta copiada literalmente de outra fonte ou identica a gabarito sem reelaboracao propria.
 Nao use flag "copia" — similaridade entre alunos e detectada por outro sistema."""
 
+    max_tokens = min(max(len(questoes) * 350 + 400, 800), 4096)
     resp = await _openai_call(
         lambda: client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=4096,
+            max_tokens=max_tokens,
             temperature=0,
             response_format={"type": "json_object"},
         )
@@ -667,11 +668,12 @@ Criterios de status:
 Para questoes dissertativas, valorize raciocinio coerente e argumentacao mesmo sem resposta unica.
 Flag "ia": texto excessivamente formal/padronizado sem erros naturais de escrita a mao."""
 
+    max_tokens = min(max(len(questoes) * 350 + 400, 800), 4096)
     resp = await _openai_call(
         lambda: client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=4096,
+            max_tokens=max_tokens,
             temperature=0,
             response_format={"type": "json_object"},
         )
