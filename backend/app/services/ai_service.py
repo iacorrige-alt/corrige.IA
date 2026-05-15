@@ -463,16 +463,22 @@ async def _identificar_aluno(texto: str, alunos: list[dict]) -> str | None:
             return nomes_norm[matches[0]]
 
     # ── Fallback: LLM ─────────────────────────────────────────────────────────
-    prompt = (
-        f"No texto abaixo, identifique qual dos seguintes alunos e o autor da prova.\n"
-        f"Lista de alunos: {', '.join(nomes)}\n\n"
-        f"Texto:\n{texto[:2000]}\n\n"
-        f"Responda APENAS com o nome exato de um aluno da lista, ou 'desconhecido' se nao encontrar."
+    # Lista de alunos em role:system (fixa por turma) — cacheável pela OpenAI entre uploads
+    # da mesma atividade. Texto da prova em role:user (variável por aluno).
+    system_id = (
+        f"Voce identifica o autor de provas escolares.\n"
+        f"Lista de alunos da turma: {', '.join(nomes)}\n"
+        f"Responda APENAS com o nome exato de um aluno da lista acima, "
+        f"ou 'desconhecido' se nao encontrar."
     )
+    user_id = f"Texto da prova:\n{texto[:2000]}"
     resp = await _openai_call(
         lambda: client.chat.completions.create(
             model=_MODEL_TEXT,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                {"role": "system", "content": system_id},
+                {"role": "user",   "content": user_id},
+            ],
             max_tokens=100,
             temperature=0,
         )
