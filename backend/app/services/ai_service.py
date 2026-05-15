@@ -387,7 +387,7 @@ async def _extrair_texto_imagem(content: bytes, content_type: str = "image/jpeg"
                     ],
                 }
             ],
-            max_tokens=4096,
+            max_tokens=2048,
         )
     )
     if not resp.choices:
@@ -614,11 +614,12 @@ Retorne um JSON no formato exato:
 
 Baseie os criterios no conteudo da questao. Responda em portugues."""
 
+    max_tokens = min(len(questoes) * 400 + 300, 2048)
     resp = await _openai_call(
         lambda: client.chat.completions.create(
             model=_MODEL_TEXT,
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=4096,
+            max_tokens=max_tokens,
             temperature=0.1,
             response_format={"type": "json_object"},
         )
@@ -885,11 +886,12 @@ Regras:
 - Se o gabarito ou resposta esperada estiver no documento, inclua. Caso contrário, retorne null.
 Responda em português."""
 
+    max_tokens = min(max(len(texto) // 4 + 400, 800), 2048)
     resp = await _openai_call(
         lambda: client.chat.completions.create(
             model=_MODEL_TEXT,
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=4096,
+            max_tokens=max_tokens,
             temperature=0,
             response_format={"type": "json_object"},
         )

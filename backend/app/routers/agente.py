@@ -375,7 +375,7 @@ async def _stream_chat(
                     stream=True,
                     stream_options={"include_usage": True},
                     temperature=0.7,
-                    max_tokens=4096,
+                    max_tokens=2048 if model == _MODEL_TEXT else 4096,
                 )
             except Exception as e:
                 logger.error("OpenAI stream error: %s", e)
