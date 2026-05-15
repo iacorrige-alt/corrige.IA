@@ -308,9 +308,11 @@ async def _processar_upload(
     await asyncio.to_thread(_salvar_resultado, ativ["id"], aluno_id, questoes, respostas_ia)
 
 
+_PDF_MAX_PAGES = 6  # limite por upload — evita custo excessivo em PDFs longos
+
+
 async def _extrair_texto_pdf(content: bytes) -> str:
-    """Try text extraction first; fall back to Vision with PNG conversion if scanned."""
-    # Attempt native text extraction (non-blocking)
+    """Try text extraction first; fall back to Vision for all pages if scanned."""
     def _extrair_sincrono() -> str:
         reader = PdfReader(BytesIO(content))
         return "\n".join(page.extract_text() or "" for page in reader.pages)
@@ -322,49 +324,59 @@ async def _extrair_texto_pdf(content: bytes) -> str:
     except Exception:
         pass
 
-    # Fallback: render first page to image and send to Vision
-    img_bytes, img_mime = await asyncio.to_thread(_pdf_primeira_pagina_png, content)
-    return await _extrair_texto_imagem(img_bytes, content_type=img_mime)
+    # Fallback: converte todas as páginas e extrai texto em paralelo
+    paginas = await asyncio.to_thread(_pdf_paginas_para_imagens, content)
+    if len(paginas) > 1:
+        logger.info("PDF escaneado com %d pagina(s) — processando em paralelo", len(paginas))
+    textos = await asyncio.gather(
+        *[_extrair_texto_imagem(img_bytes, content_type=mime) for img_bytes, mime in paginas]
+    )
+    return "\n\n".join(t for t in textos if t.strip())
 
 
-def _pdf_primeira_pagina_png(content: bytes) -> tuple[bytes, str]:
-    """Render the first page of a PDF to image bytes + MIME type.
+def _pdf_paginas_para_imagens(content: bytes) -> list[tuple[bytes, str]]:
+    """Converte todas as páginas de um PDF escaneado para lista de (image_bytes, mime_type).
 
-    Returns (image_bytes, mime_type). Falls back gracefully through three strategies:
-    1. pdf2image full render → always PNG
-    2. First embedded image from the page → preserves original MIME type
-    3. Raw PDF bytes → Vision will reject with a clear error (mime = application/pdf)
+    Limitado a _PDF_MAX_PAGES páginas. Estratégias em ordem:
+    1. pdf2image (se instalado) → JPEG por página
+    2. Primeira imagem embutida por página (pypdf)
     """
+    _MIME_MAP = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
     try:
         reader = PdfReader(BytesIO(content))
         if not reader.pages:
             raise RuntimeError("PDF sem páginas")
-        page = reader.pages[0]
+
+        n_pages = min(len(reader.pages), _PDF_MAX_PAGES)
+        results: list[tuple[bytes, str]] = []
 
         try:
             import pdf2image  # optional dependency
-            images = pdf2image.convert_from_bytes(content, first_page=1, last_page=1, dpi=100)
-            if images:
+            images = pdf2image.convert_from_bytes(content, first_page=1, last_page=n_pages, dpi=100)
+            for img in images:
                 buf = BytesIO()
-                images[0].save(buf, format="JPEG", quality=75, optimize=True)
-                return buf.getvalue(), "image/jpeg"
+                img.save(buf, format="JPEG", quality=75, optimize=True)
+                results.append((buf.getvalue(), "image/jpeg"))
+            if results:
+                return results
         except ImportError:
             pass
 
-        # Last resort: return first embedded image with its real MIME type
-        for img_obj in page.images:
-            ext = (img_obj.name or "").rsplit(".", 1)[-1].lower()
-            mime = {
-                "jpg": "image/jpeg",
-                "jpeg": "image/jpeg",
-                "png": "image/png",
-                "webp": "image/webp",
-            }.get(ext, "image/jpeg")
-            return img_obj.data, mime
+        # Fallback: primeira imagem embutida por página
+        for page in reader.pages[:n_pages]:
+            for img_obj in page.images:
+                ext = (img_obj.name or "").rsplit(".", 1)[-1].lower()
+                results.append((img_obj.data, _MIME_MAP.get(ext, "image/jpeg")))
+                break  # uma imagem por página é suficiente
+
+        if results:
+            return results
+
+        raise RuntimeError("Nenhuma imagem encontrada nas páginas do PDF")
 
     except Exception as exc:
-        logger.warning("Nao foi possivel converter PDF para imagem: %s", exc)
-        raise RuntimeError(f"Falha ao converter PDF para imagem: {exc}") from exc
+        logger.warning("Nao foi possivel converter PDF para imagens: %s", exc)
+        raise RuntimeError(f"Falha ao converter PDF para imagens: {exc}") from exc
 
 
 _TESSERACT_MIN_CHARS = 150       # mínimo de caracteres não-espaço para confiar no Tesseract
