@@ -367,20 +367,34 @@ def _pdf_primeira_pagina_png(content: bytes) -> tuple[bytes, str]:
         raise RuntimeError(f"Falha ao converter PDF para imagem: {exc}") from exc
 
 
-_TESSERACT_MIN_CHARS = 80  # mínimo de caracteres não-espaço para confiar no Tesseract
+_TESSERACT_MIN_CHARS = 150       # mínimo de caracteres não-espaço para confiar no Tesseract
+_TESSERACT_MIN_ALPHA_RATIO = 0.55  # mínimo de letras sobre total não-espaço (filtra ruído de imagem)
 
 
 def _tesseract_ocr(content: bytes) -> str | None:
-    """Tenta extrair texto via Tesseract (gratuito). Retorna None se indisponível ou resultado pobre."""
+    """Tenta extrair texto via Tesseract (gratuito). Retorna None se indisponível ou resultado pobre.
+
+    Critérios de qualidade: mínimo de chars não-espaço E ratio mínimo de letras Unicode.
+    O ratio filtra lixo de OCR (ruído gera símbolos aleatórios, não letras).
+    """
     try:
         import pytesseract
         from PIL import Image as _PILImage
 
         img = _PILImage.open(BytesIO(content))
         text = pytesseract.image_to_string(img, lang="por+eng", config="--psm 6")
-        if len(text.replace(" ", "").replace("\n", "")) >= _TESSERACT_MIN_CHARS:
-            return text.strip()
-        return None
+        stripped = text.strip()
+        no_space = stripped.replace(" ", "").replace("\n", "").replace("\t", "")
+        if len(no_space) < _TESSERACT_MIN_CHARS:
+            return None
+        alpha_ratio = sum(1 for c in no_space if c.isalpha()) / len(no_space)
+        if alpha_ratio < _TESSERACT_MIN_ALPHA_RATIO:
+            logger.info(
+                "Tesseract rejeitado: alpha_ratio=%.2f < %.2f (possível ruído de imagem)",
+                alpha_ratio, _TESSERACT_MIN_ALPHA_RATIO,
+            )
+            return None
+        return stripped
     except Exception:
         return None
 
