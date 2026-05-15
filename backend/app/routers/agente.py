@@ -21,7 +21,7 @@ router = APIRouter(prefix="/agente", tags=["agente"])
 
 _client = AsyncOpenAI(api_key=settings.openai_api_key)
 
-_MODEL_VISION = "gpt-4o"
+_MODEL_VISION = "gpt-4.1-mini"
 _MODEL_TEXT   = "gpt-4.1-mini"
 MAX_TOOL_ROUNDS = 5
 
