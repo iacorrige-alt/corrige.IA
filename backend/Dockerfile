@@ -2,7 +2,8 @@ FROM python:3.11.12-slim
 
 WORKDIR /app
 
-# Dependências do sistema necessárias para libs Python (psycopg2, etc.)
+# Dependências do sistema necessárias para libs Python (psycopg2, etc.) + Tesseract OCR
+ARG CACHE_BUST=2
 RUN apt-get update && apt-get install -y \
     gcc \
     libpq-dev \
