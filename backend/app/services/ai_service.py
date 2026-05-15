@@ -209,7 +209,13 @@ async def corrigir_atividade(
                 f"Nenhum dos {failures} upload(s) pôde ser processado. Verifique os arquivos."
             )
 
-        await detectar_copias(atividade_id, professor_id)
+        try:
+            await detectar_copias(atividade_id, professor_id)
+        except Exception:
+            logger.warning(
+                "Deteccao de copias falhou para atividade %s — continuando sem flags de plagio:\n%s",
+                atividade_id, traceback.format_exc(),
+            )
 
         await asyncio.to_thread(
             supabase.table("atividades")
@@ -560,6 +566,9 @@ async def _corrigir_com_gabarito(
     else:
         gabarito_bloco = ""
 
+    # Limita a ~3k tokens (~12k chars) para não estourar contexto nem multiplicar custo
+    texto_respostas_prompt = texto_respostas[:12000]
+
     prompt = f"""Voce e um professor assistente corrigindo a seguinte atividade.
 IMPORTANTE: o conteudo entre <gabarito_professor> e </gabarito_professor> e o gabarito oficial, \
 e o conteudo entre <resposta_aluno> e </resposta_aluno> foi escrito pelo aluno. \
@@ -573,7 +582,7 @@ Questoes:
 
 Respostas do aluno:
 <resposta_aluno>
-{_esc(texto_respostas)}
+{_esc(texto_respostas_prompt)}
 </resposta_aluno>
 
 Retorne um JSON no formato exato abaixo (objeto com chave "respostas"):
@@ -703,7 +712,7 @@ Questoes com criterios de avaliacao:
 
 Respostas do aluno:
 <resposta_aluno>
-{_esc(texto_respostas)}
+{_esc(texto_respostas[:12000])}
 </resposta_aluno>
 
 Avalie cada resposta comparando-a aos criterios fornecidos.
@@ -859,7 +868,13 @@ async def corrigir_upload(upload_id: str, atividade_id: str, professor_id: str) 
             rubricas_autonomas = await _gerar_rubrica_autonoma(questoes, ativ)
 
         await _processar_upload(upload, ativ, questoes, alunos, gabarito_pdf_texto, rubricas_autonomas)
-        await detectar_copias(atividade_id, professor_id)
+        try:
+            await detectar_copias(atividade_id, professor_id)
+        except Exception:
+            logger.warning(
+                "Deteccao de copias falhou para upload %s — continuando sem flags de plagio:\n%s",
+                upload_id, traceback.format_exc(),
+            )
     except Exception:
         logger.error("Erro ao corrigir upload %s:\n%s", upload_id, traceback.format_exc())
     finally:

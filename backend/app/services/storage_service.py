@@ -63,7 +63,7 @@ async def upload_file(
     upsert = bool(custom_path)
 
     async def _do_upload():
-        async with httpx.AsyncClient(timeout=60) as client:
+        async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(
                 _storage_url(storage_path),
                 content=content,
@@ -98,7 +98,7 @@ async def create_signed_url(storage_path: str, expires_in: int = 3600) -> str:
 
 async def download_file(storage_path: str) -> bytes:
     async def _do_download():
-        async with httpx.AsyncClient(timeout=60) as client:
+        async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.get(
                 _storage_url(storage_path),
                 headers=_headers(),

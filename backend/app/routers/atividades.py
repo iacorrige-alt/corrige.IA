@@ -290,8 +290,8 @@ async def adicionar_questao(
     )
     if not ativ.data:
         raise HTTPException(status_code=404, detail="Atividade não encontrada.")
-    if ativ.data["status"] in ("corrigindo", "concluida"):
-        raise HTTPException(status_code=409, detail="Não é possível alterar questões de uma atividade já concluída ou em correção.")
+    if ativ.data["status"] in ("corrigindo", "concluida", "erro"):
+        raise HTTPException(status_code=409, detail="Não é possível alterar questões de uma atividade já concluída, em correção ou com erro.")
 
     result = await asyncio.to_thread(
         supabase.table("questoes").insert({

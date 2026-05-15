@@ -52,7 +52,7 @@ async def upload_provas(
             detail="Correção já em andamento. Aguarde a conclusão antes de enviar novos arquivos.",
         )
 
-    # ── Fase 1: validar todos os arquivos antes de qualquer upload ──────────────
+    # ── Fase 1: validar todos os arquivos antes de qualquer I/O ─────────────────
     file_contents: list[tuple] = []
     for file in files:
         if file.content_type not in ALLOWED_TYPES:
@@ -63,7 +63,24 @@ async def upload_provas(
         content = await ler_arquivo(file, MAX_FILE_SIZE)
         file_contents.append((file.filename, file.content_type, content))
 
-    # ── Fase 2: fazer os uploads (todos válidos) ─────────────────────────────
+    # ── Fase 2: lock atômico ANTES dos uploads ───────────────────────────────
+    # Garante que requests concorrentes nunca chegam à fase de upload — o perdedor
+    # retorna 409 antes de tocar o storage, eliminando arquivos órfãos.
+    now_utc = datetime.now(timezone.utc).isoformat()
+    lock = await asyncio.to_thread(
+        supabase.table("atividades")
+        .update({"status": "corrigindo", "correcao_iniciada_em": now_utc})
+        .eq("id", atividade_id)
+        .neq("status", "corrigindo")
+        .execute
+    )
+    if not lock.data:
+        raise HTTPException(
+            status_code=409,
+            detail="Correção já em andamento. Aguarde a conclusão antes de enviar novos arquivos.",
+        )
+
+    # ── Fase 3: fazer os uploads (lock já garantido) ─────────────────────────
     rows: list[dict] = []
     storage_paths: list[str] = []
     for filename, content_type, content in file_contents:
@@ -81,27 +98,6 @@ async def upload_provas(
             "tipo_arquivo": tipo,
             "content_type": content_type,
         })
-
-    # Lock atômico ANTES do insert no DB: garante que se o lock falhar, nenhuma
-    # linha de upload fica órfã apontando para arquivos que serão deletados do storage.
-    now_utc = datetime.now(timezone.utc).isoformat()
-    lock = await asyncio.to_thread(
-        supabase.table("atividades")
-        .update({"status": "corrigindo", "correcao_iniciada_em": now_utc})
-        .eq("id", atividade_id)
-        .neq("status", "corrigindo")
-        .execute
-    )
-    if not lock.data:
-        for path in storage_paths:
-            try:
-                await asyncio.to_thread(supabase.storage.from_("provas").remove, [path])
-            except Exception:
-                pass
-        raise HTTPException(
-            status_code=409,
-            detail="Correção já em andamento. Aguarde a conclusão antes de enviar novos arquivos.",
-        )
 
     try:
         records = await asyncio.to_thread(supabase.table("uploads").insert(rows).execute)
