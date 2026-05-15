@@ -53,7 +53,7 @@ client = AsyncOpenAI(
     max_retries=0,   # Desabilitado — backoff manual com jitter abaixo
 )
 
-_MODEL_VISION = "gpt-4o"        # Vision/OCR — mantém gpt-4o pela qualidade em manuscritos
+_MODEL_VISION = "gpt-4.1-mini"  # Vision/OCR — mini com compressão de imagem + detail:low
 _MODEL_TEXT   = "gpt-4.1-mini"  # Texto — melhor custo/performance que gpt-4o-mini
 
 _OPENAI_RETRYABLE = (openai.RateLimitError, openai.APIStatusError, openai.APIConnectionError)
@@ -337,11 +337,11 @@ def _pdf_primeira_pagina_png(content: bytes) -> tuple[bytes, str]:
 
         try:
             import pdf2image  # optional dependency
-            images = pdf2image.convert_from_bytes(content, first_page=1, last_page=1, dpi=150)
+            images = pdf2image.convert_from_bytes(content, first_page=1, last_page=1, dpi=100)
             if images:
                 buf = BytesIO()
-                images[0].save(buf, format="PNG")
-                return buf.getvalue(), "image/png"
+                images[0].save(buf, format="JPEG", quality=75, optimize=True)
+                return buf.getvalue(), "image/jpeg"
         except ImportError:
             pass
 
@@ -361,8 +361,34 @@ def _pdf_primeira_pagina_png(content: bytes) -> tuple[bytes, str]:
         raise RuntimeError(f"Falha ao converter PDF para imagem: {exc}") from exc
 
 
+_OCR_MAX_PX = 1024  # lado máximo antes de enviar à Vision API
+
+
+def _comprimir_imagem(content: bytes) -> tuple[bytes, str]:
+    """Redimensiona para no máximo 1024px e recomprime em JPEG q=75.
+
+    Retorna (bytes_comprimidos, mime_type). Falha silenciosa: devolve o original.
+    """
+    try:
+        from PIL import Image as _Image
+        img = _Image.open(BytesIO(content))
+        if img.mode not in ("RGB", "L"):
+            img = img.convert("RGB")
+        w, h = img.size
+        if max(w, h) > _OCR_MAX_PX:
+            scale = _OCR_MAX_PX / max(w, h)
+            img = img.resize((int(w * scale), int(h * scale)), _Image.LANCZOS)
+        buf = BytesIO()
+        img.save(buf, format="JPEG", quality=75, optimize=True)
+        return buf.getvalue(), "image/jpeg"
+    except Exception as exc:
+        logger.warning("Compressao de imagem falhou, usando original: %s", exc)
+        return content, "image/jpeg"
+
+
 async def _extrair_texto_imagem(content: bytes, content_type: str = "image/jpeg") -> str:
-    """Use GPT-4o Vision to transcribe handwritten or printed text from an image."""
+    """Transcreve texto de prova via Vision — gpt-4.1-mini com imagem comprimida e detail:low."""
+    content, content_type = await asyncio.to_thread(_comprimir_imagem, content)
     b64 = base64.b64encode(content).decode()
 
     resp = await _openai_call(
@@ -382,7 +408,10 @@ async def _extrair_texto_imagem(content: bytes, content_type: str = "image/jpeg"
                         },
                         {
                             "type": "image_url",
-                            "image_url": {"url": f"data:{content_type};base64,{b64}"},
+                            "image_url": {
+                                "url": f"data:{content_type};base64,{b64}",
+                                "detail": "low",
+                            },
                         },
                     ],
                 }
