@@ -20,6 +20,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/agente", tags=["agente"])
 
 _client = AsyncOpenAI(api_key=settings.openai_api_key)
+
+_MODEL_VISION = "gpt-4o"
+_MODEL_TEXT   = "gpt-4.1-mini"
 MAX_TOOL_ROUNDS = 5
 
 # ─── Ferramentas disponíveis para o agente ─────────────────────────────────────
@@ -354,7 +357,7 @@ async def _executar_tool(name: str, args: dict, professor_id: str) -> str:
 async def _stream_chat(
     messages: list[dict],
     professor_id: str,
-    model: str = "gpt-4o-mini",
+    model: str = _MODEL_TEXT,
 ) -> AsyncGenerator[str, None]:
     total_input = 0
     total_output = 0
@@ -541,7 +544,7 @@ async def chat(
             })
 
     tem_imagem = any(msg.image_base64 for msg in body.messages)
-    model = "gpt-4o" if tem_imagem else "gpt-4o-mini"
+    model = _MODEL_VISION if tem_imagem else _MODEL_TEXT
 
     # Mantém system prompt + últimas 10 mensagens para evitar input crescente em conversas longas
     if len(openai_messages) > 11:

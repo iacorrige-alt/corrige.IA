@@ -49,9 +49,12 @@ def _ensure_cache_lock() -> asyncio.Lock:
 
 client = AsyncOpenAI(
     api_key=settings.openai_api_key,
-    timeout=90.0,    # GPT-4o Vision em imagens grandes pode levar ~60s
+    timeout=90.0,
     max_retries=0,   # Desabilitado — backoff manual com jitter abaixo
 )
+
+_MODEL_VISION = "gpt-4o"        # Vision/OCR — mantém gpt-4o pela qualidade em manuscritos
+_MODEL_TEXT   = "gpt-4.1-mini"  # Texto — melhor custo/performance que gpt-4o-mini
 
 _OPENAI_RETRYABLE = (openai.RateLimitError, openai.APIStatusError, openai.APIConnectionError)
 
@@ -364,7 +367,7 @@ async def _extrair_texto_imagem(content: bytes, content_type: str = "image/jpeg"
 
     resp = await _openai_call(
         lambda: client.chat.completions.create(
-            model="gpt-4o",
+            model=_MODEL_VISION,
             messages=[
                 {
                     "role": "user",
@@ -430,7 +433,7 @@ async def _identificar_aluno(texto: str, alunos: list[dict]) -> str | None:
     )
     resp = await _openai_call(
         lambda: client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=_MODEL_TEXT,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=100,
             temperature=0,
@@ -565,7 +568,7 @@ Nao use flag "copia" — similaridade entre alunos e detectada por outro sistema
     max_tokens = min(max(len(questoes) * 350 + 400, 800), 4096)
     resp = await _openai_call(
         lambda: client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=_MODEL_TEXT,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=max_tokens,
             temperature=0,
@@ -613,7 +616,7 @@ Baseie os criterios no conteudo da questao. Responda em portugues."""
 
     resp = await _openai_call(
         lambda: client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=_MODEL_TEXT,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=4096,
             temperature=0.1,
@@ -697,7 +700,7 @@ Flag "ia": texto excessivamente formal/padronizado sem erros naturais de escrita
     max_tokens = min(max(len(questoes) * 350 + 400, 800), 4096)
     resp = await _openai_call(
         lambda: client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=_MODEL_TEXT,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=max_tokens,
             temperature=0,
@@ -884,7 +887,7 @@ Responda em português."""
 
     resp = await _openai_call(
         lambda: client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=_MODEL_TEXT,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=4096,
             temperature=0,
@@ -1013,7 +1016,7 @@ Seja especifico e baseado nos numeros. Responda em portugues."""
     try:
         resp = await _openai_call(
             lambda: client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=_MODEL_TEXT,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=1024,
                 temperature=0.3,
