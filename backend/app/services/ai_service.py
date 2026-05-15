@@ -388,12 +388,15 @@ def _tesseract_ocr(content: bytes) -> str | None:
 
     Critérios de qualidade: mínimo de chars não-espaço E ratio mínimo de letras Unicode.
     O ratio filtra lixo de OCR (ruído gera símbolos aleatórios, não letras).
+    Pré-processa a imagem com grayscale + autocontraste para melhorar a taxa de acerto
+    em fotos com iluminação irregular ou fundo amarelado (caso típico de fotos de prova).
     """
     try:
         import pytesseract
-        from PIL import Image as _PILImage
+        from PIL import Image as _PILImage, ImageOps as _ImageOps
 
-        img = _PILImage.open(BytesIO(content))
+        img = _PILImage.open(BytesIO(content)).convert("L")  # grayscale
+        img = _ImageOps.autocontrast(img)                    # normaliza contraste
         text = pytesseract.image_to_string(img, lang="por+eng", config="--psm 6")
         stripped = text.strip()
         no_space = stripped.replace(" ", "").replace("\n", "").replace("\t", "")
@@ -497,7 +500,7 @@ async def _identificar_aluno(texto: str, alunos: list[dict]) -> str | None:
         f"Responda APENAS com o nome exato de um aluno da lista acima, "
         f"ou 'desconhecido' se nao encontrar."
     )
-    user_id = f"Texto da prova:\n{texto[:2000]}"
+    user_id = f"Texto da prova:\n{texto[:500]}"
     resp = await _openai_call(
         lambda: client.chat.completions.create(
             model=_MODEL_TEXT,
