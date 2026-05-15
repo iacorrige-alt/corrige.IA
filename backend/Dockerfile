@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.11.12-slim
 
 WORKDIR /app
 
@@ -6,8 +6,6 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     gcc \
     libpq-dev \
-    libjpeg-dev \
-    zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Instala dependências Python antes de copiar o código

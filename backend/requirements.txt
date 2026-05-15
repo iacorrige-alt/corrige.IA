@@ -4,7 +4,6 @@ python-multipart==0.0.27
 supabase==2.25.1
 openai==2.34.0
 pypdf==6.10.2
-Pillow==11.2.1
 python-dotenv==1.2.2
 pydantic[email]==2.13.3
 pydantic-settings==2.14.0

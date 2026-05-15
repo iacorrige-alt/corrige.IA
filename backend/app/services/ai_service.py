@@ -361,34 +361,8 @@ def _pdf_primeira_pagina_png(content: bytes) -> tuple[bytes, str]:
         raise RuntimeError(f"Falha ao converter PDF para imagem: {exc}") from exc
 
 
-_OCR_MAX_PX = 1024  # lado máximo antes de enviar à Vision API
-
-
-def _comprimir_imagem(content: bytes) -> tuple[bytes, str]:
-    """Redimensiona para no máximo 1024px e recomprime em JPEG q=75.
-
-    Retorna (bytes_comprimidos, mime_type). Falha silenciosa: devolve o original.
-    """
-    try:
-        from PIL import Image as _Image
-        img = _Image.open(BytesIO(content))
-        if img.mode not in ("RGB", "L"):
-            img = img.convert("RGB")
-        w, h = img.size
-        if max(w, h) > _OCR_MAX_PX:
-            scale = _OCR_MAX_PX / max(w, h)
-            img = img.resize((int(w * scale), int(h * scale)), _Image.LANCZOS)
-        buf = BytesIO()
-        img.save(buf, format="JPEG", quality=75, optimize=True)
-        return buf.getvalue(), "image/jpeg"
-    except Exception as exc:
-        logger.warning("Compressao de imagem falhou, usando original: %s", exc)
-        return content, "image/jpeg"
-
-
 async def _extrair_texto_imagem(content: bytes, content_type: str = "image/jpeg") -> str:
-    """Transcreve texto de prova via Vision — gpt-4.1-mini com imagem comprimida e detail:low."""
-    content, content_type = await asyncio.to_thread(_comprimir_imagem, content)
+    """Transcreve texto de prova via Vision — gpt-4.1-mini com detail:low."""
     b64 = base64.b64encode(content).decode()
 
     resp = await _openai_call(
