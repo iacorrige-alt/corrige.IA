@@ -408,9 +408,11 @@ async def _extrair_texto_imagem(content: bytes, content_type: str = "image/jpeg"
                         {
                             "type": "text",
                             "text": (
-                                "Transcreva todo o texto desta prova/atividade escolar fielmente, "
-                                "incluindo o nome do aluno no topo (se houver) e todas as respostas. "
-                                "Separe claramente cada questao. Retorne apenas o texto transcrito, sem comentarios."
+                                "Extraia desta prova escolar: "
+                                "1) o nome do aluno (linha 'Nome:' ou similar no topo, se houver); "
+                                "2) cada resposta numerada (ex: '1. ...', 'Q2 ...', 'Questao 3 ...'). "
+                                "Ignore cabecalho, data, turma e instrucoes gerais. "
+                                "Retorne apenas nome e respostas numeradas, sem comentarios."
                             ),
                         },
                         {
@@ -423,7 +425,7 @@ async def _extrair_texto_imagem(content: bytes, content_type: str = "image/jpeg"
                     ],
                 }
             ],
-            max_tokens=2048,
+            max_tokens=1024,
         )
     )
     if not resp.choices:
@@ -598,8 +600,8 @@ async def _corrigir_com_gabarito(
         f"<resposta_aluno>\n{_esc(texto_respostas[:12000])}\n</resposta_aluno>"
     )
 
-    # 180 tokens por questao cobre: id + status + nota + texto_resposta + comentario curto
-    max_tokens = min(max(len(questoes) * 180 + 100, 500), 1500)
+    # 110 tokens por questao cobre: id + status + nota + texto_resposta (≤400 chars) + comentario 1-2 frases
+    max_tokens = min(max(len(questoes) * 110 + 100, 400), 1200)
     resp = await _openai_call(
         lambda: client.chat.completions.create(
             model=_MODEL_TEXT,
@@ -730,7 +732,7 @@ async def _corrigir_com_rubrica_autonoma(
         f"<resposta_aluno>\n{_esc(texto_respostas[:12000])}\n</resposta_aluno>"
     )
 
-    max_tokens = min(max(len(questoes) * 180 + 100, 500), 1500)
+    max_tokens = min(max(len(questoes) * 110 + 100, 400), 1200)
     resp = await _openai_call(
         lambda: client.chat.completions.create(
             model=_MODEL_TEXT,
