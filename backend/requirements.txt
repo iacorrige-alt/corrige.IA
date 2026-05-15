@@ -9,6 +9,8 @@ pydantic[email]==2.13.3
 pydantic-settings==2.14.0
 httpx==0.28.1
 slowapi==0.1.9
+pytesseract==0.3.13
+Pillow==11.2.1
 
 # Dev / test
 pytest==8.2.2

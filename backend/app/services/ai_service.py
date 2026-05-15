@@ -361,8 +361,35 @@ def _pdf_primeira_pagina_png(content: bytes) -> tuple[bytes, str]:
         raise RuntimeError(f"Falha ao converter PDF para imagem: {exc}") from exc
 
 
+_TESSERACT_MIN_CHARS = 80  # mínimo de caracteres não-espaço para confiar no Tesseract
+
+
+def _tesseract_ocr(content: bytes) -> str | None:
+    """Tenta extrair texto via Tesseract (gratuito). Retorna None se indisponível ou resultado pobre."""
+    try:
+        import pytesseract
+        from PIL import Image as _PILImage
+
+        img = _PILImage.open(BytesIO(content))
+        text = pytesseract.image_to_string(img, lang="por+eng", config="--psm 6")
+        if len(text.replace(" ", "").replace("\n", "")) >= _TESSERACT_MIN_CHARS:
+            return text.strip()
+        return None
+    except Exception:
+        return None
+
+
 async def _extrair_texto_imagem(content: bytes, content_type: str = "image/jpeg") -> str:
-    """Transcreve texto de prova via Vision — gpt-4.1-mini com detail:low."""
+    """Transcreve texto de prova via Vision — gpt-4.1-mini com detail:low.
+
+    Tenta Tesseract primeiro (gratuito). Só chama a Vision API se o resultado for insuficiente
+    (texto manuscrito, imagem de baixa qualidade, etc.).
+    """
+    tesseract_result = await asyncio.to_thread(_tesseract_ocr, content)
+    if tesseract_result:
+        logger.info("OCR via Tesseract (sem custo de API), chars=%d", len(tesseract_result))
+        return tesseract_result
+
     b64 = base64.b64encode(content).decode()
 
     resp = await _openai_call(
