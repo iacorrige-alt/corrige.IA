@@ -209,7 +209,7 @@ async def corrigir_atividade(
                 f"Nenhum dos {failures} upload(s) pôde ser processado. Verifique os arquivos."
             )
 
-        await detectar_copias(atividade_id)
+        await detectar_copias(atividade_id, professor_id)
 
         await asyncio.to_thread(
             supabase.table("atividades")
@@ -828,7 +828,7 @@ async def corrigir_upload(upload_id: str, atividade_id: str, professor_id: str) 
             rubricas_autonomas = await _gerar_rubrica_autonoma(questoes, ativ)
 
         await _processar_upload(upload, ativ, questoes, alunos, gabarito_pdf_texto, rubricas_autonomas)
-        await detectar_copias(atividade_id)
+        await detectar_copias(atividade_id, professor_id)
     except Exception:
         logger.error("Erro ao corrigir upload %s:\n%s", upload_id, traceback.format_exc())
     finally:
